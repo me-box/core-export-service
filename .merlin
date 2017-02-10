@@ -1,4 +1,9 @@
 PKG bytes
+PKG lwt
+PKG opium
+PKG cohttp
+PKG macarooons
+
 S src
 S test
 B _build/**
