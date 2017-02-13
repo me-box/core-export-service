@@ -3,6 +3,7 @@ PKG lwt
 PKG opium
 PKG cohttp
 PKG macarooons
+PKG base64
 
 S src
 S test

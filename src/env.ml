@@ -20,7 +20,7 @@ let arbiter_endp () =
   with Not_found -> !arbiter_endpoint
 
 
-let arbiter_key () =
-  try Some (Sys.getenv "ARBITER_KEY")
+let arbiter_token () =
+  try Some (Sys.getenv "ARBITER_TOKEN")
   with Not_found -> !arbiter_key
 
