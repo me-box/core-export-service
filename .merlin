@@ -1,8 +1,9 @@
+PKG topkg
 PKG bytes
 PKG lwt
 PKG opium
 PKG cohttp
-PKG macarooons
+PKG macaroons
 PKG base64
 
 S src

@@ -2,7 +2,7 @@ let local_name = ref "databox-export-bridge"
 let local_port = ref "8080"
 
 let arbiter_endpoint = ref "https://databox-arbiter:8080"
-let arbiter_key = ref None
+let arbiter_key = ref ""
 
 
 let local_name () =
@@ -21,6 +21,6 @@ let arbiter_endp () =
 
 
 let arbiter_token () =
-  try Some (Sys.getenv "ARBITER_TOKEN")
+  try Sys.getenv "ARBITER_TOKEN"
   with Not_found -> !arbiter_key
 
