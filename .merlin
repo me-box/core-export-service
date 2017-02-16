@@ -5,6 +5,7 @@ PKG opium
 PKG cohttp
 PKG macaroons
 PKG base64
+PKG uuidm
 
 S src
 S test
