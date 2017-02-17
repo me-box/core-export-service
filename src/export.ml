@@ -1,6 +1,8 @@
 open Lwt
 open Opium.Std
 
+module Client = Cohttp_lwt_unix.Client
+
 type request = {
     id   : Uuidm.t;
     url  : Uri.t;
@@ -97,6 +99,26 @@ let export q =
   post "/export" @@ handler q
 
 
+let worker_t q =
+  let process {id; url; body} =
+    let () = Hashtbl.replace q.stbl id `Processing in
+    Client.post ~body url >>= fun (resp, body) ->
+    let status = Cohttp.Response.status resp in
+    let resp = {status; body} in
+    let state = `Finished resp in
+    let () = Hashtbl.replace q.stbl id state in
+    return_unit
+  in
+  let rec aux () =
+    let requests = Lwt_stream.get_available q.t in
+    Lwt_list.map_p process requests >>= fun _ ->
+    aux ()
+  in
+  aux ()
 
 
 
+let app =
+  App.empty
+  |> middleware Macaroon.macaroon_verifier_mw
+  |> export
