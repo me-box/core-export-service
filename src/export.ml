@@ -117,8 +117,24 @@ let worker_t q =
   aux ()
 
 
+let () =
+  let t, push = Lwt_stream.create () in
+  let stbl = Hashtbl.create 13 in
+  let queue = {t; stbl; push} in
 
-let app =
-  App.empty
-  |> middleware Macaroon.macaroon_verifier_mw
-  |> export
+  let app =
+    App.empty
+    |> middleware Macaroon.macaroon_verifier_mw
+    |> export queue in
+
+  let export_queue =
+    match App.run_command' app with
+    | `Ok t -> t
+    | _ -> assert false
+  in
+
+  let t = Lwt.join [
+      export_queue;
+      worker_t queue; ]
+  in
+  Lwt_main.run t
