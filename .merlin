@@ -6,6 +6,7 @@ PKG cohttp
 PKG macaroons
 PKG base64
 PKG uuidm
+PKG bos
 
 S src
 S test

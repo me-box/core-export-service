@@ -117,13 +117,15 @@ let worker_t q =
   aux ()
 
 
-let () =
+let t =
   let t, push = Lwt_stream.create () in
   let stbl = Hashtbl.create 13 in
   let queue = {t; stbl; push} in
 
+  let p = Env.local_port () |> int_of_string in
   let app =
     App.empty
+    |> App.port p
     |> middleware Macaroon.macaroon_verifier_mw
     |> export queue in
 
@@ -133,8 +135,6 @@ let () =
     | _ -> assert false
   in
 
-  let t = Lwt.join [
+  Lwt.join [
       export_queue;
       worker_t queue; ]
-  in
-  Lwt_main.run t
