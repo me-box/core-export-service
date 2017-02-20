@@ -122,7 +122,7 @@ let t =
   let stbl = Hashtbl.create 13 in
   let queue = {t; stbl; push} in
 
-  let p = Env.local_port () |> int_of_string in
+  let p = Export_env.local_port () |> int_of_string in
   let app =
     App.empty
     |> App.port p

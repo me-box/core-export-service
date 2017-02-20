@@ -8,10 +8,10 @@ module Macaroon   = Sodium_macaroons
 let s = ref None
 
 let get_secret () =
-  let endp = Uri.of_string (Env.arbiter_endp ()) in
+  let endp = Uri.of_string (Export_env.arbiter_endp ()) in
   let url = Uri.with_path endp "/store/secret" in
 
-  let h = ["X-Api-Key", Env.arbiter_token ()] in
+  let h = ["X-Api-Key", Export_env.arbiter_token ()] in
   let headers = Cohttp.Header.of_list h in
 
   Client.get ~headers url >>= fun (resp, body) ->
@@ -32,7 +32,7 @@ let rec secret () = match !s with
 
 
 let verify_target caveat_str =
-  let expected = "target = " ^ Env.local_name () in
+  let expected = "target = " ^ Export_env.local_name () in
   expected = caveat_str
 
 

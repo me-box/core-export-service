@@ -1,6 +1,6 @@
 true : bin_annot, safe_string, package(bytes)
 
-true : package(lwt, macaroons, base64, cohttp, opium, uuidm)
+true : package(lwt, macaroons, macaroons.sodium, base64, cohttp, opium, uuidm, opium.unix)
 
 <src> : include
 <test> : include
