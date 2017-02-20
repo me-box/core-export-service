@@ -84,7 +84,7 @@ let export q =
          let resp = dict [
            "id", Uuidm.to_string id |> string;
            "state", string_of_state s |> string;
-           "respons", r;]
+           "response", r;]
          in
          let () = Hashtbl.remove q.stbl id in
          `Json resp |> respond' end
@@ -92,7 +92,7 @@ let export q =
          let resp = dict [
            "id", Uuidm.to_string id |> string;
            "state", string_of_state state |> string;
-           "respons", "" |> string;]
+           "response", "" |> string;]
          in
          `Json resp |> respond'
   in
