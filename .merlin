@@ -7,6 +7,7 @@ PKG macaroons
 PKG base64
 PKG uuidm
 PKG bos
+PKG logs
 
 S src
 S test
