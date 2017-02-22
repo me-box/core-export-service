@@ -1,18 +1,30 @@
 opam-version: "1.2"
 maintainer: "Qi Li <liqi0425@gmail.com>"
 authors: ["Qi Li <liqi0425@gmail.com>"]
-homepage: "https://github.com/sevenEng/databox-bridge"
-doc: "https://www.cl.cam.ac.uk/~ql272/databox-bridge/doc"
-license: "ISC"
-dev-repo: "https://github.com/sevenEng/databox-bridge.git"
-bug-reports: "https://github.com/sevenEng/databox-bridge/issues"
+homepage: "https://github.com/me-box/databox-export-service"
+license: "MIT"
+dev-repo: "https://github.com/me-box/databox-export-service.git"
+bug-reports: "https://github.com/me-box/databox-export-service/issues"
 tags: []
+
 available: [ ocaml-version >= "4.01.0"]
+
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "topkg" {build} ]
+  "topkg" {build}
+
+  "lwt"
+  "fmt"
+  "opium"
+  "cohttp"
+  "sodium"
+  "macaroons"
+  "logs"
+  "uuidm"]
+
 depopts: []
+
 build: [
   "ocaml" "pkg/pkg.ml" "build"
           "--pinned" pinned ]

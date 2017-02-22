@@ -5,5 +5,6 @@ open Topkg
 
 let () =
   Pkg.describe "databox-bridge" @@ fun c ->
-  Ok [ Pkg.mllib "src/databox-bridge.mllib";
+  Ok [ Pkg.mllib ~api:["Export"] "src/databox-bridge.mllib";
+       Pkg.bin "src/service" ~dst:"databox-export-service";
        Pkg.test "test/test"; ]
