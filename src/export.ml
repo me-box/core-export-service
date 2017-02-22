@@ -128,7 +128,7 @@ let t () =
   let queue = {t; stbl; push} in
 
   let p = Export_env.local_port () |> int_of_string in
-  let () = Logs.info (fun m -> m "[export] serving on port %d" p) in
+  let () = Logs.info (fun m -> m "serving on port %d" p) in
   let app =
     App.empty
     |> App.port p
@@ -142,5 +142,5 @@ let t () =
   in
 
   Lwt.join [
-      export_queue;
-      worker_t queue; ]
+    export_queue;
+    worker_t queue; ]

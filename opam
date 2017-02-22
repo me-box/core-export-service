@@ -1,6 +1,7 @@
 opam-version: "1.2"
 maintainer: "Qi Li <liqi0425@gmail.com>"
 authors: ["Qi Li <liqi0425@gmail.com>"]
+version: "0.0.1"
 homepage: "https://github.com/me-box/databox-export-service"
 license: "MIT"
 dev-repo: "https://github.com/me-box/databox-export-service.git"
@@ -21,10 +22,15 @@ depends: [
   "sodium"
   "macaroons"
   "logs"
-  "uuidm"]
+  "uuidm"
+]
 
-depopts: []
 
 build: [
-  "ocaml" "pkg/pkg.ml" "build"
-          "--pinned" pinned ]
+  "ocaml" "pkg/pkg.ml" "build" "--pinned" pinned "-n" name "--tests" "false"
+]
+
+build-test: [
+  ["ocaml" "pkg/pkg.ml" "build" "--pinned" pinned "-n" name "--tests" "true"]
+  ["ocaml" "pkg/pkg.ml" "test"]
+]
