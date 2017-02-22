@@ -1,1 +1,1 @@
-val t : unit Lwt.t
+val t : unit -> unit Lwt.t

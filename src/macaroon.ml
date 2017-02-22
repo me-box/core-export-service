@@ -52,17 +52,17 @@ let verify_path url meth caveat_str =
     let path = Uri.path url in
     List.mem path wl
 
-
+(* assume all destinations are valid for now *)
 let verify_destination dest caveat_str =
   let expected = "destination = " ^ dest in
-  caveat_str = expected
+  true || caveat_str = expected
 
 
 let extract_destination body =
   Cohttp_lwt_body.to_string body >>= fun body ->
   let open Ezjsonm in
   let dic = from_string body |> value |> get_dict in
-  let dest = List.assoc "url" dic in
+  let dest = List.assoc "dest" dic in
   return @@ get_string dest
 
 
@@ -71,7 +71,7 @@ let macaroon_verifier_mw =
   let filter = fun handler req ->
     let headers = Request.headers req in
     let token =
-      match Cohttp.Header.get headers "X-Api-Key" with
+      match Cohttp.Header.get headers "x-api-key" with
       | None -> raise Not_found
       | Some m -> m
     in
@@ -82,9 +82,6 @@ let macaroon_verifier_mw =
     in
     secret () >>= fun key ->
 
-    let body = Request.body req in
-    extract_destination body >>= fun dest ->
-
     let url = Request.uri req in
     let meth = Request.meth req in
 
@@ -93,12 +90,14 @@ let macaroon_verifier_mw =
       let l = [
           verify_target;
           verify_path url meth;
-          verify_destination dest;] in
+          verify_destination "";] in
       List.exists f l
     in
 
     let r = Macaroon.verify macaroon ~key ~check [] in
-    if r then handler req
+    if r then
+      Logs_lwt.info (fun m -> m "macaroon verification passes") >>= fun () ->
+      handler req
     else
       let body = Cohttp_lwt_body.of_string "Invalid API key/token" in
       let code = `Unauthorized in

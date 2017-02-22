@@ -32,6 +32,7 @@ let export q =
   let handler q req =
     let body = Request.body req in
     Cohttp_lwt_body.to_string body >>= fun body ->
+    Logs_lwt.info (fun m -> m "body: %s\n" body) >>= fun () ->
 
     let open Ezjsonm in
     let obj =
@@ -51,7 +52,8 @@ let export q =
       in
       let body =
         List.assoc "data" obj
-        |> get_string
+        |> get_dict
+        |> fun d -> to_string (`O d)
       in
       let id = Uuidm.create `V4 in
       let request = {
@@ -110,19 +112,23 @@ let worker_t q =
     return_unit
   in
   let rec aux () =
-    let requests = Lwt_stream.get_available q.t in
-    Lwt_list.map_p process requests >>= fun _ ->
-    aux ()
+    Lwt_stream.get q.t >>= function
+    | None -> Logs_lwt.warn (fun m -> m "Got None...(stream closed?)")
+    | Some r ->
+        process r >>= fun () ->
+        Logs_lwt.info (fun m -> m "Finished processing of a request!") >>=
+        aux
   in
   aux ()
 
 
-let t =
+let t () =
   let t, push = Lwt_stream.create () in
   let stbl = Hashtbl.create 13 in
   let queue = {t; stbl; push} in
 
   let p = Export_env.local_port () |> int_of_string in
+  let () = Logs.info (fun m -> m "[export] serving on port %d" p) in
   let app =
     App.empty
     |> App.port p
