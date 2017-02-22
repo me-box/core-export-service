@@ -5,7 +5,7 @@ module Macaroon = Sodium_macaroons
 module Client   = Cohttp_lwt_unix.Client
 
 
-let arbiter_endp    = "http://localhost:8888"
+let arbiter_endp    = "http://127.0.0.1:8888"
 let arbiter_token   = "Believe it or not, I'm an arbiter token"
 let macaroon_secret = "Am I a secret, or not, or whatever?"
 let export_service  = "data_export_service"
@@ -111,13 +111,13 @@ let client () =
   Logs_lwt.app (fun m' -> m' "[client] %s" m) >>= fun () ->
 
   let headers = Cohttp.Header.init_with "X-Api-Key" m in
-  let uri = Uri.of_string ("http://localhost:" ^ export_port) in
+  let uri = Uri.of_string ("http://127.0.0.1:" ^ export_port) in
   let uri = Uri.with_path uri "/export" in
 
   let make_body id =
     let obj = `O [
         "id",   `String id;
-        "dest", `String ("http://localhost:" ^ local_echo_port);
+        "dest", `String ("http://127.0.0.1:" ^ local_echo_port);
         "data", `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]]
     in
     obj
@@ -190,7 +190,8 @@ let main () =
       let wait () =
         Lwt_unix.wait () >>= fun (cpid, status) ->
         assert (pid = cpid);
-        return_unit
+        if status = Unix.(WEXITED 0) then return_unit
+        else Lwt.fail_with "client fails"
       in
       let t = wait () <?> server () in
       Lwt_main.run t;
