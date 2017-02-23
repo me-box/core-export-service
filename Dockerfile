@@ -12,10 +12,12 @@ EXPOSE 8080 8000 8888
 
 RUN git clone https://github.com/sevenEng/databox-bridge.git \
   && cd databox-bridge \
-  && git checkout dockerise \
   && opam pin add -n databox-export-service . \
   && opam install --deps-only databox-export-service \
-  && opam install -t databox-export-service
+  && eval `opam config env` \
+  && ocaml pkg/pkg.ml build --tests true \
+  && ocaml pkg/pkg.ml test \
+  && opam install databox-export-service
 
 ENTRYPOINT ["opam", "config", "exec", "--"]
 CMD ["databox-export-service"]
