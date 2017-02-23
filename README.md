@@ -1,37 +1,38 @@
-databox-bridge — bridge component for databox
+databox-export-service - export service for databox platform
 -------------------------------------------------------------------------------
 %%VERSION%%
 
-databox-bridge is TODO
+databox-export-service is distributed under the MIT license.
 
-databox-bridge is distributed under the ISC license.
-
-Homepage: https://github.com/sevenEng/databox-bridge  
+Homepage: https://github.com/me-box/databox-export-service
 
 ## Installation
 
-databox-bridge can be installed with `opam`:
+databox-export-service can be installed with `opam`:
 
+	opam pin -n add databox-export-service https://github.com/me-box/databox-export-service.git
     opam install databox-bridge
 
-If you don't use `opam` consult the [`opam`](opam) file for build
-instructions.
 
-## Documentation
+Or build your own docker image:
 
-The documentation and API reference is generated from the source
-interfaces. It can be consulted [online][doc] or via `odig doc
-databox-bridge`.
+    docker build -t <image name> .
 
-[doc]: https://www.cl.cam.ac.uk/~ql272/databox-bridge/doc
+The docker container solution is recommended, as there are extra system dependencies and local package pins to make it work for the `opam` installation. All of this has been taken care of by steps in Dockerfile.
 
-## Sample programs
 
-If you installed databox-bridge with `opam` sample programs are located in
-the directory `opam var databox-bridge:doc`.
+## API
 
-In the distribution sample programs and tests are located in the
-[`test`](test) directory of the distribution. They can be built and run
-with:
+This service only exposes one endpoint:
 
-    topkg build --tests true && topkg test 
+    Method   : POST
+	URL      : /export
+	Parameter: JSON object that has the format {id: <request id>, dest: <destination url>, data: <export data>}
+	Response : JSON object with the format {id: <request id>, state: <request state>, response: <response>}
+
+When making a query to this endpoint, make sure there is a `X-Api-Key` header included, it contains an arbiter-minted macaroon.
+
+The service will use `id` field in request parameter to differentiate between a newly submitted export request and a polling action about some previously submitted one. If the field is left as an empty string, it will be treated as a new export request, and the export service will put it in a queue and generate its unique id, and include the id in the reponse JSON object. The `data` field will be parsed as a stringified JSON object.
+
+The client could poll the state of its request by including the service provided id. The `state` is of string type, and could be one of `"Pending"`, `"Processing"`, and `"Finished"`. If the state is `"Finished"`, the `response` field will be a raw JSON body as `{status: <status code>, body: <response body>}`.
+
