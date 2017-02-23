@@ -14,6 +14,7 @@ RUN git clone https://github.com/sevenEng/databox-bridge.git \
   && cd databox-bridge \
   && git checkout dockerise \
   && opam pin add -n databox-export-service . \
+  && opam install --deps-only databox-export-service \
   && opam install -t databox-export-service
 
 ENTRYPOINT ["opam", "config", "exec", "--"]
