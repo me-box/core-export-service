@@ -3,8 +3,8 @@ FROM ocaml/opam:alpine
 RUN sudo apk add libsodium-dev libffi-dev
 
 RUN opam depext -y conf-m4.1
-RUN opam pin add -y sodium https://github.com/dsheets/ocaml-sodium.git
-RUN opam pin add -y macaroons https://github.com/nojb/ocaml-macaroons.git
+RUN opam pin add -n sodium https://github.com/dsheets/ocaml-sodium.git
+RUN opam pin add -n macaroons https://github.com/nojb/ocaml-macaroons.git
 
 # tests use three ports
 # while the service will be on 8080
