@@ -24,3 +24,16 @@ let arbiter_token () =
   try Sys.getenv "ARBITER_TOKEN"
   with Not_found -> !arbiter_key
 
+
+let cert_path = ref ""
+let key_path  = ref ""
+
+
+let cert_path () =
+  try Sys.getenv "HTTPS_SERVER_CERT"
+  with Not_found -> !cert_path
+
+
+let key_path () =
+  try Sys.getenv "HTTPS_SERVER_PRIVATE_KEY"
+  with Not_found -> !key_path
