@@ -19,5 +19,7 @@ RUN git clone https://github.com/sevenEng/databox-bridge.git \
   && ocaml pkg/pkg.ml test \
   && opam install databox-export-service
 
+LABEL databox.type="export-service"
+
 ENTRYPOINT ["opam", "config", "exec", "--"]
 CMD ["databox-export-service"]
