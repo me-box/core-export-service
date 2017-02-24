@@ -129,9 +129,18 @@ let t () =
 
   let p = Export_env.local_port () |> int_of_string in
   let () = Logs.info (fun m -> m "serving on port %d" p) in
-  let app =
+
+  let cert = Export_env.cert_path ()
+  and key  = Export_env.key_path () in
+
+  let base_app =
     App.empty
     |> App.port p
+    |> (if cert != "" && key != "" then App.ssl ~cert ~key
+        else fun b -> b)
+  in
+  let app =
+    base_app
     |> middleware Macaroon.macaroon_verifier_mw
     |> export queue in
 
