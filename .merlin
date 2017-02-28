@@ -8,6 +8,8 @@ PKG base64
 PKG uuidm
 PKG bos
 PKG logs
+PKG rresult
+
 
 S src
 S test
