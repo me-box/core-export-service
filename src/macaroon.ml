@@ -43,11 +43,12 @@ let verify_target caveat_str =
 
 
 let verify_path url meth caveat_str =
-  let prefix_len = String.length "routes = " in
-  let prefix = String.sub caveat_str 0 prefix_len in
+  try
+    let prefix_len = String.length "routes = " in
+    let prefix = String.sub caveat_str 0 prefix_len in
 
-  if not (prefix = "routes = ") then false
-  else
+    if not (prefix = "routes = ") then false
+    else
     let l = String.length caveat_str in
     let r = String.sub caveat_str prefix_len (l - prefix_len) in
 
@@ -57,6 +58,10 @@ let verify_path url meth caveat_str =
     let wl = Ezjsonm.(get_list get_string wl) in
     let path = Uri.path url in
     List.mem path wl
+  with _ ->
+    (* String.sub, Ezjsonm.from_string, List.assoc, Ezjsonm.get_list *)
+    (* throw all kinds of exceptions, TODO: logging them? *)
+    false
 
 
 (* assume all destinations are valid for now *)

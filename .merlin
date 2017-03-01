@@ -9,7 +9,7 @@ PKG uuidm
 PKG bos
 PKG logs
 PKG rresult
-
+PKG depyt
 
 S src
 S test
