@@ -81,7 +81,7 @@ let export q =
   let handler q req =
     let body = Request.body req in
     Cohttp_lwt_body.to_string body >>= fun body ->
-    Logs_lwt.info (fun m -> m "body: %s\n" body) >>= fun () ->
+    Logs_lwt.info (fun m -> m "body: %s" body) >>= fun () ->
 
     let request = decode_request body in
     let bind_f r =

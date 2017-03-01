@@ -29,7 +29,7 @@ let logging_mw =
     let uri = Request.uri req in
     let body = Request.body req in
     Cohttp_lwt_body.to_string body >>= fun b ->
-    Logs_lwt.app (fun m ->
+    Logs_lwt.info (fun m ->
         m "[logging mw] %s http:%a %s" meth Uri.pp_hum uri b) >>= fun () ->
     let b = Cohttp_lwt_body.of_string b in
     let req = Request.({req with body = b}) in
@@ -58,6 +58,14 @@ let local_echo () =
   | _ -> assert false
 
 
+let mint_macaroon ?(id = "arbiter") ?(location = arbiter_endp) ?(key = macaroon_secret)
+    ?(target = "target = " ^ export_service) ~routes () =
+  let m = Macaroon.create ~id ~location ~key in
+  let m = Macaroon.add_first_party_caveat m target in
+  let m = Macaroon.add_first_party_caveat m routes in
+  Macaroon.serialize m
+
+
 let arbiter () =
   let secret_endp = get "/store/secret" begin fun req ->
       let headers = Request.headers req in
@@ -70,28 +78,32 @@ let arbiter () =
       `String s |> respond'
     end in
   let token_endp = get "/token" begin fun req ->
-      let location = arbiter_endp in
-      let key = macaroon_secret in
-      let id = "fake arbiter" in
-      let m = Macaroon.create ~location ~key ~id in
-      let target = "target = " ^ export_service in
       let routes = Ezjsonm.(
           let l = `A [`String "/export"] in
           let d = `O ["POST", l] in
           let v = to_string d in
           "routes = " ^ v
         ) in
-      let m = Macaroon.add_first_party_caveat m target in
-      let m = Macaroon.add_first_party_caveat m routes in
-      let s = Macaroon.serialize m in
-      `String s |> respond'
+      let token = mint_macaroon ~routes () in
+      `String token |> respond'
+    end in
+  let invalid_routes_token_endp = get "/routes-token" begin fun req ->
+      let routes = Ezjsonm.(
+          let l = `A [] in
+          let d = `O ["POST", l] in
+          let v = to_string d in
+          "routes = " ^ v)
+      in
+      let token = mint_macaroon ~routes () in
+      `String token |> respond'
     end in
   let app =
     App.empty
     |> App.middleware logging_mw
     |> App.port 8888
     |> secret_endp
-    |> token_endp in
+    |> token_endp
+    |> invalid_routes_token_endp in
   match App.run_command' app with
   | `Ok t -> t
   | _ -> assert false
@@ -100,6 +112,131 @@ let arbiter () =
 let server () =
   set_environment ();
   Lwt.join [arbiter (); Export.t (); local_echo ()]
+
+
+
+let env = Hashtbl.create 13
+let put_env k v = Hashtbl.add env k v
+let get_env k =
+  if not (Hashtbl.mem env k) then None
+  else Some (Hashtbl.find env k)
+
+
+let step meth uri ?headers ?body ?pre ?post () =
+  let uri = Uri.of_string uri in
+  let headers = match headers with
+  | None -> Cohttp.Header.init ()
+  | Some h -> Cohttp.Header.of_list h
+  in
+  let body = match body with
+  | None -> Cohttp_lwt_body.empty
+  | Some b -> Cohttp_lwt_body.of_string b
+  in
+
+  (match pre with
+  | None -> return (uri, headers, body)
+  | Some f -> f uri headers body)
+
+  >>= fun (uri, headers, body) ->
+  (match meth with
+  | `GET -> Client.get ~headers uri
+  | `POST -> Client.post ~headers ~body uri
+  | _ -> Lwt.fail_with "not implemented METHOD")
+
+  >>= fun (resp, body) ->
+  match post with
+  | None -> return_unit
+  | Some f ->
+      f resp body >>= fun _ ->
+      return_unit
+
+
+let flow steps =
+  Lwt_list.iteri_s (fun i ((m, u, headers, body, pre, post) as s) ->
+      let pp_step ppf (m, u, h, b, _, _) =
+        let m = Cohttp.Code.string_of_method m in
+        Format.fprintf ppf "%s %s" m u
+      in
+      Logs_lwt.info (fun m -> m "[client] step %d %a" i pp_step s) >>= fun () ->
+      step m u ?headers ?body ?pre ?post ()) steps
+
+
+let assertion ?resp ?body () =
+  (match resp with
+  | Some (r, ext_r, exp_r, pp_r, k_r) ->
+      ext_r r >>= fun re_r ->
+      if exp_r = re_r then k_r re_r else
+      Logs_lwt.err (fun m ->
+          m "Assertion failed, expected %a, got %a" pp_r exp_r pp_r re_r)
+      >>= fun () -> Lwt.fail_with "assertion failed"
+  | None -> return_unit) >>= fun () ->
+
+  match body with
+  | Some (b, ext_b, exp_b, pp_b, k_b) ->
+      ext_b b >>= fun re_b ->
+      if exp_b = re_b then k_b re_b else
+      Logs_lwt.err (fun m ->
+          m "Assertion failed, expected %a, got %a" pp_b exp_b pp_b re_b)
+      >>= fun () -> Lwt.fail_with "assertion failed"
+  | None -> return_unit
+
+
+let default_k = fun _ -> return_unit
+
+let extract_status s = return @@ Cohttp.Response.status s
+
+let pp_status ppf s =
+  let s = Cohttp.Code.string_of_status s in
+  Format.fprintf ppf "%s" s
+
+
+let make_body id =
+  let data =
+    `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]
+    |> Ezjsonm.to_string
+  in
+  let obj = `O [
+      "id",   `String id;
+      "uri", `String ("http://127.0.0.1:" ^ local_echo_port);
+      "data", `String data; ]
+  in
+  obj
+  |> Ezjsonm.to_string
+
+
+let save_token r b =
+  Cohttp_lwt_body.to_string b >>= fun b ->
+
+  let resp =
+    let exp_r = `OK in
+    r, extract_status, exp_r, pp_status, default_k
+  in
+  let body =
+    let ext_b = fun i -> return i in
+    let exp_b = b in
+    let k b =
+      put_env "x-api-key" b;
+      return_unit in
+    b, ext_b, exp_b, Format.pp_print_string, k
+  in
+  assertion ~resp ~body ()
+
+
+let insert_token u h b =
+  match get_env "x-api-key" with
+  | None -> return (u, h, b)
+  | Some k ->
+      Logs_lwt.info (fun m -> m "[client] get key: %s" k)
+      >>= fun () ->
+      let h = Cohttp.Header.add h "X-Api-Key" k in
+      return (u, h, b)
+
+
+let print s b =
+  extract_status s >>= fun s ->
+  Cohttp_lwt_body.to_string b >>= fun b ->
+  let s = Cohttp.Code.string_of_status s in
+  Logs_lwt.info (fun m -> m "[client] status: %s body: %s" s b)
 
 
 let client () =
@@ -115,10 +252,14 @@ let client () =
   let uri = Uri.with_path uri "/export" in
 
   let make_body id =
+    let data =
+      `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]
+      |> Ezjsonm.to_string
+    in
     let obj = `O [
         "id",   `String id;
-        "dest", `String ("http://127.0.0.1:" ^ local_echo_port);
-        "data", `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]]
+        "uri", `String ("http://127.0.0.1:" ^ local_echo_port);
+        "data", `String data; ]
     in
     obj
     |> Ezjsonm.to_string
@@ -135,8 +276,13 @@ let client () =
 
   Client.post ~body:(make_body "") ~headers uri >>= fun (resp, body) ->
   Cohttp_lwt_body.to_string body >>= fun body ->
-
   let status = Cohttp.Response.status resp in
+  (if status != `OK then
+     let status = Cohttp.Code.string_of_status status in
+     Logs_lwt.err (fun m -> m "[client] status: %s" status) >>= fun () ->
+     Logs_lwt.err (fun m -> m "[client] body: %s" body)
+   else return_unit) >>= fun () ->
+
   let () = assert (status = `OK) in
   get_field body "id" Ezjsonm.get_string   >>= fun id ->
   get_field body "state" Ezjsonm.get_string >>= fun state ->
@@ -147,7 +293,7 @@ let client () =
     match s with
     | "Finished" ->
         let open Ezjsonm in
-        get_field b "response" get_dict >>= fun response ->
+        get_field b "ext_response" get_dict >>= fun response ->
         let status = get_string @@ List.assoc "status" response in
         let () = assert (status = "200 OK") in
         let dic =
@@ -177,6 +323,17 @@ let client () =
   aux body state
 
 
+let case1 = [
+  `GET, arbiter_endp ^ "/token",
+   None, None, None, Some save_token;
+  `POST, "http://127.0.0.1:" ^ export_port ^ "/export",
+   None, Some (make_body ""), Some insert_token, Some print;
+]
+
+
+let client' cases =
+  Lwt_list.iter_s flow cases
+
 
 let main () =
   Logs.set_reporter (Logs_fmt.reporter ());
@@ -184,7 +341,8 @@ let main () =
   match Lwt_unix.fork () with
   | 0 ->
       Unix.sleepf 2.5;
-      Lwt_main.run @@ client ();
+      (*Lwt_main.run @@ client ();*)
+      Lwt_main.run @@ client' [case1];
       Logs.info (fun m -> m "[client] OK!")
   | pid ->
       let wait () =
