@@ -3,7 +3,7 @@ open Opium.Std
 
 module Macaroon = Sodium_macaroons
 module Client   = Cohttp_lwt_unix.Client
-
+module M        = Test_misc
 
 let arbiter_endp    = "http://127.0.0.1:8888"
 let arbiter_token   = "Believe it or not, I'm an arbiter token"
@@ -113,6 +113,8 @@ let server () =
   set_environment ();
   Lwt.join [arbiter (); Export.t (); local_echo ()]
 
+
+(***********************************************************)
 
 
 let env = Hashtbl.create 13
@@ -239,6 +241,21 @@ let print s b =
   Logs_lwt.info (fun m -> m "[client] status: %s body: %s" s b)
 
 
+let case1 = [
+  `GET, arbiter_endp ^ "/token",
+   None, None, None, Some save_token;
+  `POST, "http://127.0.0.1:" ^ export_port ^ "/export",
+   None, Some (make_body ""), Some insert_token, Some print;
+]
+
+
+let client' cases =
+  Lwt_list.iter_s flow cases
+
+
+(***********************************************************)
+
+
 let client () =
   let uri = Uri.of_string arbiter_endp in
   let uri = Uri.with_path uri "/token" in
@@ -323,16 +340,8 @@ let client () =
   aux body state
 
 
-let case1 = [
-  `GET, arbiter_endp ^ "/token",
-   None, None, None, Some save_token;
-  `POST, "http://127.0.0.1:" ^ export_port ^ "/export",
-   None, Some (make_body ""), Some insert_token, Some print;
-]
+(***********************************************************)
 
-
-let client' cases =
-  Lwt_list.iter_s flow cases
 
 
 let main () =
