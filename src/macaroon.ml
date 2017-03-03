@@ -66,8 +66,12 @@ let verify_path url meth caveat_str =
 
 (* assume all destinations are valid for now *)
 let verify_destination dest caveat_str =
-  let expected = "destination = " ^ dest in
-  true || caveat_str = expected
+  try
+    let prefix_len = String.length "destination = " in
+    let prefix = String.sub caveat_str 0 prefix_len in
+    prefix = "destination = "
+  with _ -> false
+
 
 
 let extract_destination body =
