@@ -23,6 +23,7 @@ depends: [
   "macaroons"
   "logs"
   "uuidm"
+  "bos"
 ]
 
 
