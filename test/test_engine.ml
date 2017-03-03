@@ -21,7 +21,7 @@ let print_after_ts (resp, body) =
     |> Cohttp.Response.status
     |> Cohttp.Code.string_of_status
   in
-  Logs_lwt.info (fun m -> m "[test] %s %s" status body)
+  Logs_lwt.info (fun m -> m "[test] status: %s  body: %s" status body)
   >>= return_ok
 
 let empty_before_ts () =
@@ -46,7 +46,7 @@ let clear_env () = Hashtbl.clear env
 let pp_status ppf s =
   Format.fprintf ppf "%s" (Cohttp.Code.string_of_status s)
 
-let assert_equal exp  v pp =
+let assert_equal ~exp  v pp =
   if exp = v then return_ok () else
   Logs_lwt.err (fun m ->
       m "[test] assertion failed: %a <> %a [expectation]" pp v pp exp)
@@ -78,8 +78,6 @@ let process_case (name, steps) =
       process_step s >>= fun r ->
       aux (r, tl)
   | Rresult.Error m, _ ->
-      Logs_lwt.err (fun m -> m "[test] case %s failed" name)
-      >>= fun () ->
       return_error "test case failed"
   | r, _ -> return r
   in
@@ -87,13 +85,19 @@ let process_case (name, steps) =
 
 
 let process_suit cases =
-  Lwt_list.map_s (fun (name, steps) ->
-      process_case (name, steps)
+  Lwt_list.mapi_s (fun i (name, steps) ->
+      Logs_lwt.info (fun m -> m "[test] case%d <%s> starts..." i name)
+      >>= fun () -> process_case (name, steps)
       >>= fun r ->
+      (if R.is_ok r then
+         Logs_lwt.info (fun m -> m "[test] case%d <%s> passed" i name)
+       else
+       Logs_lwt.err (fun m -> m "[test] case%d <%s> failed" i name))
+      >>= fun () ->
       clear_env ();
-      return (name, r)) cases
-  >>= fun rs ->
-  Lwt_list.iteri_s (fun i (n, r) ->
-      Logs_lwt.info (fun m ->
-          if R.is_ok r then m "[test] case%d <%s> passed" i n
-          else m "[test] case%d %s failed" i n)) rs
+      return r) cases
+
+  >>= fun rs -> Lwt_list.for_all_p (fun r -> return @@ R.is_ok r) rs
+  >>= function
+  | false -> fail_with "some test case failed"
+  | true -> return_unit
