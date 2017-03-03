@@ -3,7 +3,9 @@ open Opium.Std
 
 module Macaroon = Sodium_macaroons
 module Client   = Cohttp_lwt_unix.Client
-module M        = Test_misc
+module M        = Test_engine
+module R        = Rresult.R
+
 
 let arbiter_endp    = "http://127.0.0.1:8888"
 let arbiter_token   = "Believe it or not, I'm an arbiter token"
@@ -20,7 +22,7 @@ let set_environment () =
   Unix.putenv "ARBITER_TOKEN" arbiter_token
 
 
-let logging_mw =
+let logging_mw service =
   let filter = fun handler req ->
     let meth =
       Request.meth req
@@ -30,7 +32,7 @@ let logging_mw =
     let body = Request.body req in
     Cohttp_lwt_body.to_string body >>= fun b ->
     Logs_lwt.info (fun m ->
-        m "[logging mw] %s http:%a %s" meth Uri.pp_hum uri b) >>= fun () ->
+        m "[%s] %s http:%a %s" service meth Uri.pp_hum uri b) >>= fun () ->
     let b = Cohttp_lwt_body.of_string b in
     let req = Request.({req with body = b}) in
     handler req
@@ -50,7 +52,7 @@ let local_echo () =
   let app =
     App.empty
     |> App.port (int_of_string local_echo_port)
-    |> App.middleware logging_mw
+    |> App.middleware (logging_mw "local_echo")
     |> echo
   in
   match App.run_command' app with
@@ -99,7 +101,7 @@ let arbiter () =
     end in
   let app =
     App.empty
-    |> App.middleware logging_mw
+    |> App.middleware (logging_mw "arbiter")
     |> App.port 8888
     |> secret_endp
     |> token_endp
@@ -192,15 +194,13 @@ let pp_status ppf s =
   Format.fprintf ppf "%s" s
 
 
+let data = `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]
+
 let make_body id =
-  let data =
-    `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]
-    |> Ezjsonm.to_string
-  in
   let obj = `O [
       "id",   `String id;
       "uri", `String ("http://127.0.0.1:" ^ local_echo_port);
-      "data", `String data; ]
+      "data", `String (Ezjsonm.to_string data); ]
   in
   obj
   |> Ezjsonm.to_string
@@ -241,7 +241,7 @@ let print s b =
   Logs_lwt.info (fun m -> m "[client] status: %s body: %s" s b)
 
 
-let case1 = [
+let case0 = [
   `GET, arbiter_endp ^ "/token",
    None, None, None, Some save_token;
   `POST, "http://127.0.0.1:" ^ export_port ^ "/export",
@@ -249,12 +249,18 @@ let case1 = [
 ]
 
 
-let client' cases =
-  Lwt_list.iter_s flow cases
+let client' () =
+  Lwt_list.iter_s flow [case0]
 
 
 (***********************************************************)
 
+let get_field b field f =
+  let open Ezjsonm in
+  let obj = value @@ from_string b in
+  let dic = get_dict obj in
+  f @@ List.assoc field dic
+  |> return
 
 let client () =
   let uri = Uri.of_string arbiter_endp in
@@ -268,30 +274,8 @@ let client () =
   let uri = Uri.of_string ("http://127.0.0.1:" ^ export_port) in
   let uri = Uri.with_path uri "/export" in
 
-  let make_body id =
-    let data =
-      `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]
-      |> Ezjsonm.to_string
-    in
-    let obj = `O [
-        "id",   `String id;
-        "uri", `String ("http://127.0.0.1:" ^ local_echo_port);
-        "data", `String data; ]
-    in
-    obj
-    |> Ezjsonm.to_string
-    |> Cohttp_lwt_body.of_string
-  in
-
-  let get_field b field f =
-    let open Ezjsonm in
-    let obj = value @@ from_string b in
-    let dic = get_dict obj in
-    f @@ List.assoc field dic
-    |> return
-  in
-
-  Client.post ~body:(make_body "") ~headers uri >>= fun (resp, body) ->
+  let body = make_body "" |> Cohttp_lwt_body.of_string in
+  Client.post ~body ~headers uri >>= fun (resp, body) ->
   Cohttp_lwt_body.to_string body >>= fun body ->
   let status = Cohttp.Response.status resp in
   (if status != `OK then
@@ -331,7 +315,7 @@ let client () =
         return_unit
     | _ ->
         Lwt_unix.sleep 0.5 >>= fun () ->
-        let body = make_body id in
+        let body = make_body id |> Cohttp_lwt_body.of_string in
         Client.post ~body ~headers uri >>= fun (resp, body) ->
         Cohttp_lwt_body.to_string body >>= fun body ->
         get_field body "state" Ezjsonm.get_string >>= fun state ->
@@ -343,6 +327,102 @@ let client () =
 (***********************************************************)
 
 
+let case0 =
+  let name = "basic test" in
+  let step0 =
+    let uri  =
+      let uri' = Uri.of_string arbiter_endp in
+      Uri.with_path uri' "/token"
+    in
+    let after_ts resp body =
+      let s = Cohttp.Response.status resp in
+      M.assert_equal `OK s M.pp_status >>= fun r ->
+      R.bind r (fun () ->
+          M.put_env "x-api-key" body;
+          R.ok ())
+      |> return
+    in
+    M.({meth = `GET; uri;
+        before_ts = empty_before_ts; after_ts;
+        next_ts = no_next_step})
+  in
+  let rec step1 =
+    let uri =
+      let uri' = Uri.of_string ("http://127.0.0.1:" ^ export_port) in
+      Uri.with_path uri' "/export"
+    in
+    let before_ts () =
+      let key =
+        match M.get_env "x-api-key" with
+        | None -> ""
+        | Some k -> k
+      in
+      let h = Cohttp.Header.init_with "X-Api-Key" key in
+      let id =
+        match M.get_env "id" with
+        | None -> ""
+        | Some id -> id
+      in
+      let b =
+        make_body id
+        |> Cohttp_lwt_body.of_string
+      in
+      return (h, b)
+    in
+    let after_ts resp body =
+      M.print_after_ts (resp, body) >>= fun _ ->
+      get_field body "state" Ezjsonm.get_string >>= fun s ->
+
+      let s = String.lowercase_ascii s in
+      if not (s = "finished") then
+        get_field body "id" Ezjsonm.get_string >>= fun id ->
+        M.put_env "id" id;
+        M.rm_env "ext_resp";
+        return_ok ()
+      else
+      get_field body "ext_response" Ezjsonm.get_dict >>= fun ext_resp ->
+      let v =
+        `O ext_resp
+        |> Ezjsonm.to_string
+      in
+      M.put_env "ext_resp" v;
+      return_ok ()
+    in
+    let next_ts () =
+      match M.get_env "ext_resp" with
+      | None -> return_some step1
+      | Some ext_resp ->
+          let ext_resp = Ezjsonm.(
+              from_string ext_resp
+              |> value
+              |> get_dict)
+          in
+          let data' =
+            let open Ezjsonm in
+            List.assoc "body" ext_resp
+            |> get_string
+            |> from_string
+            |> value
+            |> get_dict
+            |> List.assoc "request"
+          in
+          let pp_data ppf d =
+            let d = Ezjsonm.wrap d in
+            Format.fprintf ppf "%s" (Ezjsonm.to_string d)
+          in
+          M.assert_equal data' data pp_data >>= fun _ ->
+          M.no_next_step ()
+    in
+    M.({meth = `POST; uri;
+        before_ts; after_ts;
+        next_ts})
+  in
+  (name, [step0; step1])
+
+
+let client'' () =
+  M.process_suit [case0]
+
 
 let main () =
   Logs.set_reporter (Logs_fmt.reporter ());
@@ -350,8 +430,7 @@ let main () =
   match Lwt_unix.fork () with
   | 0 ->
       Unix.sleepf 2.5;
-      (*Lwt_main.run @@ client ();*)
-      Lwt_main.run @@ client' [case1];
+      Lwt_main.run @@ client'' ();
       Logs.info (fun m -> m "[client] OK!")
   | pid ->
       let wait () =

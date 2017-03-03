@@ -8,7 +8,7 @@ type test_step = {
   meth      : Cohttp.Code.meth;
   uri       : Uri.t;
   before_ts : unit -> (Cohttp.Header.t * Cohttp_lwt_body.t) Lwt.t;
-  after_ts  : Cohttp.Response.t -> body:string -> (unit, string) Rresult.result Lwt.t;
+  after_ts  : Cohttp.Response.t -> string -> (unit, string) Rresult.result Lwt.t;
   next_ts   : unit -> test_step option Lwt.t
 }
 
@@ -21,8 +21,8 @@ let print_after_ts (resp, body) =
     |> Cohttp.Response.status
     |> Cohttp.Code.string_of_status
   in
-  Cohttp_lwt_body.to_string body >>= fun body ->
   Logs_lwt.info (fun m -> m "[test] %s %s" status body)
+  >>= return_ok
 
 let empty_before_ts () =
   let h = Cohttp.Header.init () in
@@ -32,13 +32,19 @@ let empty_before_ts () =
 
 let env : (string, string) Hashtbl.t = Hashtbl.create 13
 
-let put_env k v = Hashtbl.add env k v
+let put_env k v = Hashtbl.replace env k v
 
 let get_env k =
   match Hashtbl.mem env k with
   | false -> None
   | true  -> Some (Hashtbl.find env k)
 
+let rm_env k = Hashtbl.remove env k
+
+let clear_env () = Hashtbl.clear env
+
+let pp_status ppf s =
+  Format.fprintf ppf "%s" (Cohttp.Code.string_of_status s)
 
 let assert_equal exp  v pp =
   if exp = v then return_ok () else
@@ -56,7 +62,7 @@ let rec process_step {meth; uri; before_ts; after_ts; next_ts} =
   | _ -> Lwt.fail_with "not implemented method")
 
   >>= fun (resp, b) -> Cohttp_lwt_body.to_string b
-  >>= fun body -> after_ts resp ~body
+  >>= fun body -> after_ts resp body
   >>= function
   | Rresult.Ok () -> begin
       next_ts () >>= function
@@ -81,10 +87,13 @@ let process_case (name, steps) =
 
 
 let process_suit cases =
-  Lwt_list.map_p (fun (name, steps) ->
+  Lwt_list.map_s (fun (name, steps) ->
       process_case (name, steps)
-      >>= fun r -> return (name, r)) cases
-  >>= Lwt_list.iteri_s (fun i (n, r) ->
+      >>= fun r ->
+      clear_env ();
+      return (name, r)) cases
+  >>= fun rs ->
+  Lwt_list.iteri_s (fun i (n, r) ->
       Logs_lwt.info (fun m ->
-          if R.is_ok r then m "[test] case%d %s passed" i n
-          else m "[test] case%d %s failed" i n))
+          if R.is_ok r then m "[test] case%d <%s> passed" i n
+          else m "[test] case%d %s failed" i n)) rs
