@@ -23,6 +23,8 @@ depends: [
   "macaroons"
   "logs"
   "uuidm"
+  "rresult"
+  "depyt"
   "bos"
 ]
 
