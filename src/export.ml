@@ -1,3 +1,4 @@
+
 open Lwt
 open Opium.Std
 
@@ -149,25 +150,50 @@ let worker_t q =
   aux ()
 
 
+let base_app () =
+  let p = Export_env.local_port () |> int_of_string in
+  let () = Logs.info (fun m -> m "serving on port %d" p) in
+
+  let env_cert = Export_env.cert_path ()
+  and env_key  = Export_env.key_path () in
+
+  let app = App.empty |> App.port p in
+
+  if env_cert = "" || env_key = "" then app else
+  let open Bos.OS in
+  let open Rresult.R.Infix in
+  (Dir.user () >>= fun user ->
+  let cert_dir =
+    Fpath.add_seg user "certs"
+    |> Fpath.to_dir_path
+  in
+  Dir.create cert_dir >>= fun _ ->
+
+  let file_cert = Fpath.add_seg cert_dir "public.cert"
+  and file_key  = Fpath.add_seg cert_dir "private.key" in
+  File.delete file_cert >>= fun () ->
+  File.delete file_key  >>= fun () ->
+  File.write file_cert env_cert >>= fun () ->
+  File.write file_key env_key   >>= fun () ->
+  let cert = Fpath.to_string file_cert in
+  let key  = Fpath.to_string file_key in
+  Ok (cert, key))
+  |> function
+  | Error msg ->
+      Logs.err(fun m ->
+          m "while installing https certs: %a" Rresult.R.pp_msg msg);
+      app
+  | Ok (cert, key) ->
+      app |> App.ssl ~cert ~key
+
+
 let t () =
   let t, push = Lwt_stream.create () in
   let stbl = Hashtbl.create 13 in
   let queue = {t; stbl; push} in
 
-  let p = Export_env.local_port () |> int_of_string in
-  let () = Logs.info (fun m -> m "serving on port %d" p) in
-
-  let cert = Export_env.cert_path ()
-  and key  = Export_env.key_path () in
-
-  let base_app =
-    App.empty
-    |> App.port p
-    |> (if cert != "" && key != "" then App.ssl ~cert ~key
-        else fun b -> b)
-  in
   let app =
-    base_app
+    base_app ()
     |> middleware Macaroon.macaroon_verifier_mw
     |> export queue in
 

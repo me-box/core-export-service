@@ -25,6 +25,7 @@ depends: [
   "uuidm"
   "rresult"
   "depyt"
+  "bos"
 ]
 
 
