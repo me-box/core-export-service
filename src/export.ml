@@ -188,6 +188,8 @@ let worker_t q =
       let con = Hashtbl.find q.etbl id in
       Lwt_condition.signal con ()
     in
+    Logs_lwt.debug (fun m -> m "%a state -> Processing" Uuidm.pp id)
+    >>= fun () ->
 
     let body =
       data |> Ezjsonm.to_string
@@ -204,7 +206,8 @@ let worker_t q =
       let con = Hashtbl.find q.etbl id in
       Lwt_condition.signal con ()
     in
-    return_unit
+    Logs_lwt.debug (fun m -> m "%a state -> Finished" Uuidm.pp id)
+    >>= return
   in
   let rec aux () =
     Lwt_stream.get q.t >>= function
