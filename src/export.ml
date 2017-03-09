@@ -1,4 +1,3 @@
-
 open Lwt
 open Opium.Std
 
@@ -27,6 +26,7 @@ and ext_response = {
 type queue = {
     t    : request Lwt_stream.t;
     stbl : (Uuidm.t, state) Hashtbl.t;
+    etbl : (Uuidm.t, unit Lwt_condition.t) Hashtbl.t;
     push : request option -> unit; }
 
 
@@ -78,6 +78,20 @@ let decode_request body =
   Depyt.decode_json depyt_request decoder
 
 
+let new_request r q =
+  let id = Uuidm.create `V4 in
+  let request = {r with id} in
+  let state = `Pending in
+
+  let ext_response = None in
+  let response = {req_id = id; state; ext_response} in
+
+  let () = Hashtbl.add q.stbl id state in
+  let () = Hashtbl.add q.etbl id (Lwt_condition.create ()) in
+  let () = q.push (Some request) in
+  response
+
+
 let export q =
   let handler q req =
     let body = Request.body req in
@@ -86,17 +100,7 @@ let export q =
 
     let request = decode_request body in
     let bind_f r =
-      if r.id = Uuidm.nil then
-        let id = Uuidm.create `V4 in
-        let request = {r with id} in
-        let state = `Pending in
-
-        let ext_response = None in
-        let response = {req_id = id; state; ext_response} in
-
-        let () = Hashtbl.add q.stbl id state in
-        let () = q.push (Some request) in
-        R.ok response
+      if r.id = Uuidm.nil then R.ok @@ new_request r q
 
       else if not @@ Hashtbl.mem q.stbl r.id then
         let id = Uuidm.to_string r.id in
@@ -124,9 +128,67 @@ let export q =
   post "/export" @@ handler q
 
 
+let get_timeout_param req =
+  let default = 5.0 in
+  let uri = Request.uri req in
+  let param = Uri.get_query_param uri "timeout" in
+  match param with
+  | None -> default
+  | Some t -> try float_of_string t with _ -> default
+
+
+let export_lp q =
+  let handler q req =
+    let body = Request.body req in
+    Cohttp_lwt_body.to_string body >>= fun body ->
+    Logs_lwt.info (fun m -> m "body: %s" body) >>= fun () ->
+
+    let timeout = get_timeout_param req in
+    let request = decode_request body in
+
+    let rec process r =
+      if r.id = Uuidm.nil then Lwt.return_ok @@ new_request r q
+
+      else if not @@ Hashtbl.mem q.stbl r.id then
+        let id = Uuidm.to_string r.id in
+        Lwt.return_error @@ "Can't find request with the id of " ^ id
+
+      else match Hashtbl.find q.stbl r.id with
+      | `Finished ext_resp as state ->
+          let ext_response = Some ext_resp in
+          let response = {req_id = r.id; state; ext_response} in
+          let () = Hashtbl.remove q.stbl r.id in
+          let () = Hashtbl.remove q.etbl r.id in
+          Lwt.return_ok response
+      | #state ->
+          let con = Hashtbl.find q.etbl r.id in
+          Lwt.pick [Lwt_unix.sleep timeout; Lwt_condition.wait con] >>= fun () ->
+
+          match Hashtbl.find q.stbl r.id with
+          | `Finished _ -> process r
+          | #state as state' ->
+            let response = {req_id = r.id; state = state'; ext_response = None} in
+            Lwt.return_ok response
+    in
+
+    match request with
+    | Ok req ->
+        process req >>= (function
+        | Ok resp -> `Json (json_of_response resp) |> respond'
+        | Error msg -> `String msg |> respond' ~code:`Not_found)
+    | Error msg -> `String msg |> respond' ~code:`Not_found
+  in
+  post "/lp/export" @@ handler q
+
+
 let worker_t q =
   let process {id; uri; data} =
     let () = Hashtbl.replace q.stbl id `Processing in
+    let () =
+      let con = Hashtbl.find q.etbl id in
+      Lwt_condition.signal con ()
+    in
+
     let body =
       data |> Ezjsonm.to_string
       |> Cohttp_lwt_body.of_string
@@ -136,7 +198,12 @@ let worker_t q =
     let status = Cohttp.Response.status resp in
     let ext_resp = {status; body} in
     let state = `Finished ext_resp in
+
     let () = Hashtbl.replace q.stbl id state in
+    let () =
+      let con = Hashtbl.find q.etbl id in
+      Lwt_condition.signal con ()
+    in
     return_unit
   in
   let rec aux () =
@@ -190,12 +257,15 @@ let base_app () =
 let t () =
   let t, push = Lwt_stream.create () in
   let stbl = Hashtbl.create 13 in
-  let queue = {t; stbl; push} in
+  let etbl = Hashtbl.create 13 in
+  let queue = {t; stbl; etbl; push} in
 
   let app =
     base_app ()
     |> middleware Macaroon.macaroon_verifier_mw
-    |> export queue in
+    |> export queue
+    |> export_lp queue
+  in
 
   let export_queue =
     match App.run_command' app with
