@@ -25,16 +25,12 @@ let get_secret () =
     s := Some (B64.decode ~alphabet body);
     return_unit
 
+let init = get_secret
 
 let secret () =
-  let rec aux cnt =
-    match !s with
-    | None ->
-        if cnt >= 3 then return @@ R.error_msg "Can't get macaroon secret"
-        else get_secret () >>= fun () -> aux (succ cnt)
-    | Some s -> return_ok s
-  in
-  aux 0
+  match !s with
+  | None ->  R.error_msg "Can't get macaroon secret"
+  | Some s -> R.ok s
 
 
 let verify_target caveat_str =
@@ -42,7 +38,25 @@ let verify_target caveat_str =
   expected = caveat_str
 
 
-let verify_path url meth caveat_str =
+let verify_method  meth caveat_str =
+  let meth =
+    meth
+    |> Cohttp.Code.string_of_method
+    |> String.lowercase_ascii
+  in
+  let expected = "method = " ^ meth in
+  let caveat_str' = String.lowercase_ascii caveat_str in
+  expected = caveat_str'
+
+(* take advantage of export-service's simple API *)
+(* pretty much the same as satisfyExact *)
+let verify_path url caveat_str =
+  let path = Uri.path url in
+  let expected = "path = " ^ path in
+  expected = caveat_str
+
+
+(* let verify_path url meth caveat_str =
   try
     let prefix_len = String.length "routes = " in
     let prefix = String.sub caveat_str 0 prefix_len in
@@ -61,7 +75,7 @@ let verify_path url meth caveat_str =
   with _ ->
     (* String.sub, Ezjsonm.from_string, List.assoc, Ezjsonm.get_list *)
     (* throw all kinds of exceptions, TODO: logging them? *)
-    false
+    false *)
 
 
 (* assume all destinations are valid for now *)
@@ -73,7 +87,6 @@ let verify_destination dest caveat_str =
   with _ -> false
 
 
-
 let extract_destination body =
   Cohttp_lwt_body.to_string body >>= fun body ->
   let open Ezjsonm in
@@ -82,21 +95,20 @@ let extract_destination body =
   return @@ get_string dest
 
 
-let verify macaroon key req =
+let verify macaroon key uri meth =
   let open R in
   if not @@ is_ok macaroon then error @@ get_error macaroon
   else if not @@ is_ok key then error @@ get_error key
   else begin
     let macaroon = get_ok macaroon
-    and key      = get_ok key
-    and url      = Request.uri req
-    and meth     = Request.meth req in
+    and key      = get_ok key in
 
     let check str =
       let f verifier = verifier str in
       let l = [
         verify_target;
-        verify_path url meth;
+        verify_method meth;
+        verify_path uri;
         verify_destination "";] in
       List.exists f l
     in
@@ -105,26 +117,30 @@ let verify macaroon key req =
   end
 
 
-(* TODO: lots of exception processing *)
+let extract_macaroon headers =
+  let open R in
+  (match Cohttp.Header.get headers "x-api-key" with
+  | Some m -> ok m
+  | None -> begin
+      match Cohttp.Header.get_authorization headers with
+      | Some (`Basic (name, _)) -> ok name
+      | _ -> error_msg "Missing API key/token" end)
+  >>= fun t ->
+  match Macaroon.deserialize t with
+  | `Ok m -> ok m
+  | `Error (_, _) -> error_msg "Invalid API key/token"
+
+
 let macaroon_verifier_mw =
   let filter = fun handler req ->
+    let uri = Request.uri req in
+    let meth = Request.meth req in
     let headers = Request.headers req in
-    let token =
-      match Cohttp.Header.get headers "x-api-key" with
-      | None -> R.error_msg "Missing API key/token"
-      | Some m -> R.ok m
-    in
-    let macaroon =
-      let bind_f t =
-        match Macaroon.deserialize t with
-        | `Ok m -> R.ok m
-        | `Error (_, _) -> R.error_msg "Invalid API key/token"
-      in
-      R.bind token bind_f
-    in
-    secret () >>= fun key ->
 
-    let r = verify macaroon key req in
+    let macaroon = extract_macaroon headers
+    and key = secret () in
+
+    let r = verify macaroon key uri meth in
 
     if R.is_error r then
       let msg =

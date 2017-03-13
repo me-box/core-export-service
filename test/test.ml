@@ -86,10 +86,10 @@ let local_echo_slow () =
 
 
 let mint_macaroon ?(id = "arbiter") ?(location = arbiter_endp) ?(key = macaroon_secret)
-    ?(target = "target = " ^ export_service) ~routes () =
+    ?(target = "target = " ^ export_service) ?(meth = "method = " ^ "POST") ~path () =
   let m = Macaroon.create ~id ~location ~key in
   let m = Macaroon.add_first_party_caveat m target in
-  let m = Macaroon.add_first_party_caveat m routes in
+  let m = Macaroon.add_first_party_caveat m path in
   Macaroon.serialize m
 
 
@@ -105,23 +105,18 @@ let arbiter () =
       `String s |> respond'
     end in
   let token_endp = get "/token" begin fun req ->
-      let routes = Ezjsonm.(
-          let l = `A [`String "/export"; `String "/lp/export"] in
-          let d = `O ["POST", l] in
-          let v = to_string d in
-          "routes = " ^ v
-        ) in
-      let token = mint_macaroon ~routes () in
+      let path = "path = /export" in
+      let token = mint_macaroon ~path () in
       `String token |> respond'
     end in
   let invalid_routes_token_endp = get "/routes-token" begin fun req ->
-      let routes = Ezjsonm.(
-          let l = `A [] in
-          let d = `O ["POST", l] in
-          let v = to_string d in
-          "routes = " ^ v)
-      in
-      let token = mint_macaroon ~routes () in
+      let invalid_path = "path = /exportttt" in
+      let token = mint_macaroon ~path:invalid_path () in
+      `String token |> respond'
+    end in
+  let lp_token_endp = get "/lp/token" begin fun req ->
+      let path = "path = /lp/export" in
+      let token = mint_macaroon ~path () in
       `String token |> respond'
     end in
   let app =
@@ -129,6 +124,7 @@ let arbiter () =
     |> App.middleware (logging_mw "arbiter")
     |> App.port 8888
     |> secret_endp
+    |> lp_token_endp
     |> token_endp
     |> invalid_routes_token_endp in
   match App.run_command' app with
@@ -615,7 +611,7 @@ module Test_client'' = struct
     let step0 =
       let uri  =
         let uri' = Uri.of_string arbiter_endp in
-        Uri.with_path uri' "/token"
+        Uri.with_path uri' "/lp/token"
       in
       let after_ts resp body =
         let s = Cohttp.Response.status resp in
