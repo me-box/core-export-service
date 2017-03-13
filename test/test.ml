@@ -7,12 +7,13 @@ module M        = Test_engine
 module R        = Rresult.R
 
 
-let arbiter_endp    = "http://127.0.0.1:8888"
-let arbiter_token   = "Believe it or not, I'm an arbiter token"
-let macaroon_secret = "Am I a secret, or not, or whatever?"
-let export_service  = "data_export_service"
-let export_port     = "8080"
-let local_echo_port = "8000"
+let arbiter_endp         = "http://127.0.0.1:8888"
+let arbiter_token        = "Believe it or not, I'm an arbiter token"
+let macaroon_secret      = "Am I a secret, or not, or whatever?"
+let export_service       = "data_export_service"
+let export_port          = "8080"
+let local_echo_port      = "8000"
+let local_echo_slow_port = "8008"
 
 
 let set_environment () =
@@ -60,6 +61,30 @@ let local_echo () =
   | _ -> assert false
 
 
+let local_echo_slow () =
+  let echo = post "/" begin fun req ->
+      let body = Request.body req in
+      Cohttp_lwt_body.to_string body >>= fun b ->
+      let v = Ezjsonm.(from_string b |> value) in
+      let r = `O ["request", v] in
+      let s = Ezjsonm.to_string r in
+      return @@`String s >>= fun resp ->
+      Lwt_unix.sleep 3.0 >>= fun () ->
+      Logs_lwt.info (fun m ->
+          m "[echo_slow] responding with %s" s) >>= fun () ->
+      respond' resp end
+  in
+  let app =
+    App.empty
+    |> App.port (int_of_string local_echo_slow_port)
+    |> App.middleware (logging_mw "local_echo_slow")
+    |> echo
+  in
+  match App.run_command' app with
+  | `Ok t -> t
+  | _ -> assert false
+
+
 let mint_macaroon ?(id = "arbiter") ?(location = arbiter_endp) ?(key = macaroon_secret)
     ?(target = "target = " ^ export_service) ~routes () =
   let m = Macaroon.create ~id ~location ~key in
@@ -81,7 +106,7 @@ let arbiter () =
     end in
   let token_endp = get "/token" begin fun req ->
       let routes = Ezjsonm.(
-          let l = `A [`String "/export"] in
+          let l = `A [`String "/export"; `String "/lp/export"] in
           let d = `O ["POST", l] in
           let v = to_string d in
           "routes = " ^ v
@@ -113,7 +138,7 @@ let arbiter () =
 
 let server () =
   set_environment ();
-  Lwt.join [arbiter (); Export.t (); local_echo ()]
+  Lwt.join [arbiter (); Export.t (); local_echo (); local_echo_slow ()]
 
 
 
@@ -126,10 +151,14 @@ let get_field b field f =
 
 let data = `O ["key", `String "KEY0"; "value", `A [`String "V0"; `String "V1"]]
 
-let make_body id =
+let make_body ?uri id =
+  let uri = match uri with
+  | None -> "http://127.0.0.1:" ^ local_echo_port
+  | Some uri -> uri
+  in
   let obj = `O [
       "id",   `String id;
-      "uri", `String ("http://127.0.0.1:" ^ local_echo_port);
+      "uri", `String uri;
       "data", `String (Ezjsonm.to_string data); ]
   in
   obj
@@ -581,8 +610,105 @@ module Test_client'' = struct
     (name, [step0; step1])
 
 
+  let case4 =
+    let name = "with long polling endpoint" in
+    let step0 =
+      let uri  =
+        let uri' = Uri.of_string arbiter_endp in
+        Uri.with_path uri' "/token"
+      in
+      let after_ts resp body =
+        let s = Cohttp.Response.status resp in
+        M.assert_equal ~exp:`OK s M.pp_status >>= fun r ->
+        R.bind r (fun () ->
+            M.put_env "x-api-key" body;
+            R.ok ())
+        |> return
+      in
+      M.({meth = `GET; uri;
+          before_ts = empty_before_ts; after_ts;
+          next_ts = no_next_step})
+    in
+    let rec step1 =
+      let uri timeout =
+        let uri' = Uri.of_string ("http://127.0.0.1:" ^ export_port) in
+        let with_path = Uri.with_path uri' "/lp/export" in
+        let with_param = Uri.add_query_param' with_path ("timeout", timeout) in
+        with_param
+      in
+      let before_ts () =
+        let key =
+          match M.get_env "x-api-key" with
+          | None -> ""
+          | Some k -> k
+        in
+        let h = Cohttp.Header.init_with "X-Api-Key" key in
+        let id =
+          match M.get_env "id" with
+          | None -> ""
+          | Some id -> id
+        in
+        let uri = "http://127.0.0.1:" ^ local_echo_slow_port in
+        let b =
+          make_body ~uri id
+          |> Cohttp_lwt_body.of_string
+        in
+        return (h, b)
+      in
+      let after_ts resp body =
+        M.print_after_ts (resp, body) >>= fun _ ->
+        get_field body "state" Ezjsonm.get_string >>= fun s ->
+
+        let s = String.lowercase_ascii s in
+        if not (s = "finished") then
+          get_field body "id" Ezjsonm.get_string >>= fun id ->
+          M.put_env "id" id;
+          M.rm_env "ext_resp";
+          return_ok ()
+        else
+        get_field body "ext_response" Ezjsonm.get_dict >>= fun ext_resp ->
+        let v =
+          `O ext_resp
+          |> Ezjsonm.to_string
+        in
+        M.put_env "ext_resp" v;
+        return_ok ()
+      in
+      let next_ts () =
+        match M.get_env "ext_resp" with
+        | None -> return_some step1
+        | Some ext_resp ->
+            let ext_resp = Ezjsonm.(
+                from_string ext_resp
+                |> value
+                |> get_dict)
+            in
+            let data' =
+              let open Ezjsonm in
+              List.assoc "body" ext_resp
+              |> get_string
+              |> from_string
+              |> value
+              |> get_dict
+              |> List.assoc "request"
+            in
+            let pp_data ppf d =
+              let d = Ezjsonm.wrap d in
+              Format.fprintf ppf "%s" (Ezjsonm.to_string d)
+            in
+            M.assert_equal data' ~exp:data pp_data >>= fun _ ->
+            M.no_next_step ()
+      in
+      let uri = uri "" in
+      M.({meth = `POST; uri;
+          before_ts; after_ts;
+          next_ts})
+    in
+    (name, [step0; step1])
+
+
   let client () =
-    M.process_suit [case0; case1; case2; case3]
+    M.process_suit [case0; case1; case2; case3; case4]
 
 end
 
@@ -591,7 +717,7 @@ module TC = Test_client''
 
 let main () =
   Logs.set_reporter (Logs_fmt.reporter ());
-  Logs.(set_level (Some Info));
+  Logs.(set_level (Some Debug));
   match Lwt_unix.fork () with
   | 0 -> begin
       Unix.sleepf 2.5;
