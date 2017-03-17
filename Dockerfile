@@ -3,6 +3,7 @@ FROM ocaml/opam:alpine
 RUN sudo apk add libsodium-dev libffi-dev
 
 RUN opam depext -y conf-m4.1
+RUN opam depext -y conf-gmp.1
 RUN opam pin add -n sodium https://github.com/dsheets/ocaml-sodium.git
 RUN opam pin add -n macaroons https://github.com/nojb/ocaml-macaroons.git
 RUN opam pin add -n depyt https://github.com/sevenEng/depyt.git#fix-opam

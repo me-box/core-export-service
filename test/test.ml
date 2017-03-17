@@ -720,8 +720,9 @@ let main () =
       try
         Lwt_main.run @@ TC.client ();
         Logs.info (fun m -> m "[client] OK!")
-      with _ ->
+      with exn ->
         Logs.err (fun m -> m "[client] ERROR!");
+        Logs.err (fun m -> m "[client] %s" (Printexc.to_string exn));
         exit 1 end
   | pid ->
       let wait () =
