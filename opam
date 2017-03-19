@@ -17,6 +17,7 @@ depends: [
 
   "lwt"
   "fmt"
+  "tls"
   "opium"
   "cohttp"
   "sodium"
