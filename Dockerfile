@@ -7,6 +7,7 @@ RUN opam depext -y conf-gmp.1
 RUN opam pin add -n sodium https://github.com/dsheets/ocaml-sodium.git
 RUN opam pin add -n macaroons https://github.com/nojb/ocaml-macaroons.git
 RUN opam pin add -n depyt https://github.com/sevenEng/depyt.git#fix-opam
+RUN opam pin add -n opium https://github.com/sevenEng/opium.git#fix-ssl-option
 
 # tests use three ports
 # while the service will be on 8080
