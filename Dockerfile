@@ -20,6 +20,7 @@ RUN git clone https://github.com/me-box/databox-export-service.git \
   && opam install --deps-only databox-export-service
 
 RUN eval `opam config env` \
+  && cd databox-export-service \
   && ocaml pkg/pkg.ml build --tests true \
   && ocaml pkg/pkg.ml test \
   && opam install databox-export-service
