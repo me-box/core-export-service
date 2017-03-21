@@ -1,26 +1,10 @@
 open Lwt
 open Opium.Std
+open Export_typ
+
 
 module Client = Cohttp_lwt_unix.Client
 module R      = Rresult.R
-
-
-type request = {
-  id   : Uuidm.t;
-  uri  : Uri.t;
-  data : Ezjsonm.t; }
-
-
-type response = {
-  req_id       : Uuidm.t;
-  state        : state;
-  ext_response : ext_response option; }
-
-and state = [`Pending | `Processing | `Finished of ext_response]
-
-and ext_response = {
-  status : Cohttp.Code.status_code;
-  body   : string; }
 
 
 type queue = {
@@ -28,54 +12,6 @@ type queue = {
     stbl : (Uuidm.t, state) Hashtbl.t;
     etbl : (Uuidm.t, unit Lwt_condition.t) Hashtbl.t;
     push : request option -> unit; }
-
-
-let depyt_request : request Depyt.t =
-  let open Depyt in
-  let id =
-    let to_t str =
-      if str = "" then Uuidm.nil
-      else match Uuidm.of_string str with
-      | None -> raise (Invalid_argument str)
-      | Some id -> id
-    in
-    like string to_t Uuidm.to_string
-  in
-  let uri = like string Uri.of_string Uri.to_string in
-  let data = like string Ezjsonm.from_string Ezjsonm.to_string in
-  record "request" (fun id uri data -> {id; uri; data})
-  |+ field "id"   id   (fun r -> r.id)
-  |+ field "uri"  uri  (fun r -> r.uri)
-  |+ field "data" data (fun r -> r.data)
-  |> sealr
-
-
-let string_of_state = function
-  | `Pending -> "Pending"
-  | `Processing -> "Processing"
-  | `Finished _ -> "Finished"
-
-
-let json_of_response {req_id; state; ext_response} =
-  let open Ezjsonm in
-  let id = req_id |> Uuidm.to_string |> string in
-  let state = state |> string_of_state |> string in
-  let ext_response = match ext_response with
-  | None -> `O []
-  | Some {status; body} ->
-      let status = status |> Cohttp.Code.string_of_status |> string in
-      let body   = body |> string in
-      `O ["status", status;
-          "body", body]
-  in
-  `O ["id", id;
-      "state", state;
-      "ext_response", ext_response]
-
-
-let decode_request body =
-  let decoder = Jsonm.decoder (`String body) in
-  Depyt.decode_json depyt_request decoder
 
 
 let new_request r q =
@@ -90,6 +26,11 @@ let new_request r q =
   let () = Hashtbl.add q.etbl id (Lwt_condition.create ()) in
   let () = q.push (Some request) in
   response
+
+
+let request_finished r q =
+  Hashtbl.remove q.stbl r.id;
+  Hashtbl.remove q.etbl r.id
 
 
 let export q =
@@ -110,7 +51,7 @@ let export q =
       | `Finished ext_resp as state ->
           let ext_response = Some ext_resp in
           let response = {req_id = r.id; state; ext_response} in
-          let () = Hashtbl.remove q.stbl r.id in
+          let () = request_finished r q in
           R.ok response
       | #state as state ->
           let response = {req_id = r.id; state; ext_response = None} in
@@ -157,8 +98,7 @@ let export_lp q =
       | `Finished ext_resp as state ->
           let ext_response = Some ext_resp in
           let response = {req_id = r.id; state; ext_response} in
-          let () = Hashtbl.remove q.stbl r.id in
-          let () = Hashtbl.remove q.etbl r.id in
+          let () = request_finished r q in
           Lwt.return_ok response
       | #state ->
           let con = Hashtbl.find q.etbl r.id in

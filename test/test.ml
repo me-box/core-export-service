@@ -86,10 +86,13 @@ let local_echo_slow () =
 
 
 let mint_macaroon ?(id = "arbiter") ?(location = arbiter_endp) ?(key = macaroon_secret)
-    ?(target = "target = " ^ export_service) ?(meth = "method = " ^ "POST") ~path () =
+    ?(target = "target = " ^ export_service) ?(meth = "method = " ^ "POST")
+    ?(dest = "destination = " ^ "http://127.0.0.1:" ^ local_echo_port) ~path () =
   let m = Macaroon.create ~id ~location ~key in
   let m = Macaroon.add_first_party_caveat m target in
   let m = Macaroon.add_first_party_caveat m path in
+  let m = Macaroon.add_first_party_caveat m meth in
+  let m = Macaroon.add_first_party_caveat m dest in
   Macaroon.serialize m
 
 
@@ -116,7 +119,8 @@ let arbiter () =
     end in
   let lp_token_endp = get "/lp/token" begin fun req ->
       let path = "path = /lp/export" in
-      let token = mint_macaroon ~path () in
+      let dest = "destination = " ^ "http://127.0.0.1:" ^ local_echo_slow_port in
+      let token = mint_macaroon ~dest ~path () in
       `String token |> respond'
     end in
   let app =
@@ -597,7 +601,7 @@ module Test_client'' = struct
       let after_ts resp body =
         M.print_after_ts (resp, body) >>= fun _ ->
         let s = Cohttp.Response.status resp in
-        M.assert_equal ~exp:`Not_found s M.pp_status
+        M.assert_equal ~exp:`Unauthorized s M.pp_status
       in
       M.({meth = `POST; uri;
           before_ts; after_ts;
