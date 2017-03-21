@@ -78,24 +78,20 @@ let verify_path url caveat_str =
     false *)
 
 
-(* assume all destinations are valid for now *)
 let verify_destination dest caveat_str =
-  try
-    let prefix_len = String.length "destination = " in
-    let prefix = String.sub caveat_str 0 prefix_len in
-    prefix = "destination = "
-  with _ -> false
+  let expected = "destination = " ^ dest in
+  expected = caveat_str
 
 
-let extract_destination body =
+(*let extract_destination body =
   Cohttp_lwt_body.to_string body >>= fun body ->
   let open Ezjsonm in
   let dic = from_string body |> value |> get_dict in
   let dest = List.assoc "dest" dic in
-  return @@ get_string dest
+  return @@ get_string dest*)
 
 
-let verify macaroon key uri meth =
+let verify macaroon key uri meth dest =
   let open R in
   if not @@ is_ok macaroon then error @@ get_error macaroon
   else if not @@ is_ok key then error @@ get_error key
@@ -104,12 +100,13 @@ let verify macaroon key uri meth =
     and key      = get_ok key in
 
     let check str =
+      Logs.debug (fun m -> m "[macaroon] check for %s..." str);
       let f verifier = verifier str in
       let l = [
         verify_target;
         verify_method meth;
         verify_path uri;
-        verify_destination "";] in
+        verify_destination dest;] in
       List.exists f l
     in
 
@@ -131,16 +128,34 @@ let extract_macaroon headers =
   | `Error (_, _) -> error_msg "Invalid API key/token"
 
 
+let extract_destination body =
+  let req_r = Export_typ.decode_request body in
+  if R.is_ok req_r then
+    let req = R.get_ok req_r in
+    let dest = Uri.to_string req.Export_typ.uri in
+    let () = Logs.debug (fun m -> m
+      "[macaroon] get %s for destination" dest) in
+    dest
+  else
+  let () = Logs.debug (fun m -> m
+    "[macaroon] get NOTHING for destination: decode error") in
+  ""
+
+
 let macaroon_verifier_mw =
   let filter = fun handler req ->
     let uri = Request.uri req in
     let meth = Request.meth req in
     let headers = Request.headers req in
 
+    let body = Request.body req in
+    Cohttp_lwt_body.to_string body >>= fun b ->
+    let dest = extract_destination b in
+
     let macaroon = extract_macaroon headers
     and key = secret () in
 
-    let r = verify macaroon key uri meth in
+    let r = verify macaroon key uri meth dest in
 
     if R.is_error r then
       let msg =
@@ -159,6 +174,8 @@ let macaroon_verifier_mw =
     else match R.get_ok r with
     | true ->
         Logs_lwt.info (fun m -> m "macaroon verification passes") >>= fun () ->
+        let body = Cohttp_lwt_body.of_string b in
+        let req = {req with body} in
         handler req
     | false ->
         let info = "Invalid API key/token" in
