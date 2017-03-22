@@ -422,7 +422,9 @@ module Test_client'' = struct
       in
       let next_ts () =
         match M.get_env "ext_resp" with
-        | None -> return_some step1
+        | None ->
+            Lwt_unix.sleep 0.5 >>= fun ()->
+            return_some step1
         | Some ext_resp ->
             let ext_resp = Ezjsonm.(
                 from_string ext_resp
