@@ -210,11 +210,10 @@ let t () =
     |> export_lp queue
   in
 
-  let export_queue =
+  let export_queue () =
     match App.run_command' app with
     | `Ok t -> t
     | _ -> assert false
   in
 
-  Macaroon.init () >>= fun () ->
-  Lwt.join [export_queue; worker_t queue; ]
+  Lwt.join [export_queue (); worker_t queue; ]
