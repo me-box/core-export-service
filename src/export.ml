@@ -216,4 +216,5 @@ let t () =
     | _ -> assert false
   in
 
+  Macaroon.init () >>= fun () ->
   Lwt.join [export_queue (); worker_t queue; ]
