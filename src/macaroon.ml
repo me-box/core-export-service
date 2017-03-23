@@ -30,6 +30,9 @@ let get_secret () =
     return_unit
 
 
+let init = get_secret
+
+
 let secret () =
   let repeat = 3 in
   let rec aux cnt =
