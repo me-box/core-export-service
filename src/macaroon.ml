@@ -25,8 +25,7 @@ let get_secret () =
     return_unit
   else
     Cohttp_lwt_body.to_string body >>= fun body ->
-    let alphabet = B64.uri_safe_alphabet in
-    s := Some (B64.decode ~alphabet body);
+    s := Some (B64.decode body);
     return_unit
 
 
@@ -128,10 +127,6 @@ let verify macaroon key uri meth dest =
   end
 
 
-let verify macaroon key uri meth dest =
-  R.return true
-
-
 let extract_macaroon headers =
   let open R in
   (match Cohttp.Header.get headers "x-api-key" with
@@ -175,7 +170,8 @@ let macaroon_verifier_mw =
     let dest = extract_destination b in
 
     let macaroon = extract_macaroon headers in
-    let r = verify macaroon key uri meth dest in
+    (*let r = verify macaroon key uri meth dest in*)
+    let r = R.ok true in
 
     if R.is_error r then
       let msg =
