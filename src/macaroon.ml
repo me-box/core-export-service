@@ -170,8 +170,7 @@ let macaroon_verifier_mw =
     let dest = extract_destination b in
 
     let macaroon = extract_macaroon headers in
-    (*let r = verify macaroon key uri meth dest in*)
-    let r = R.ok true in
+    let r = verify macaroon key uri meth dest in
 
     if R.is_error r then
       let msg =
