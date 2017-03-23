@@ -135,7 +135,10 @@ let worker_t q =
       data |> Ezjsonm.to_string
       |> Cohttp_lwt_body.of_string
     in
-    Client.post ~body uri >>= fun (resp, body) ->
+    Logs_lwt.debug (fun m ->
+        m "POSTing with %s" (Ezjsonm.to_string data)) >>= fun () ->
+    let headers = Cohttp.Header.init_with "Content-Type" "application/json" in
+    Client.post ~headers ~body uri >>= fun (resp, body) ->
     Cohttp_lwt_body.to_string body >>= fun body ->
     let status = Cohttp.Response.status resp in
     let ext_resp = {status; body} in
