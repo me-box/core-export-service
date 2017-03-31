@@ -25,15 +25,29 @@ let arbiter_token () =
   with Not_found -> !arbiter_key
 
 
-let cert_path = ref ""
-let key_path  = ref ""
+let init_certs () =
+  let open Rresult.R in
+  let env_cert =
+    try Sys.getenv "HTTPS_SERVER_CERT"
+    with Not_found -> ""
+  and env_key  =
+    try Sys.getenv "HTTPS_SERVER_PRIVATE_KEY"
+    with Not_found -> ""
+  in
 
+  if env_cert = "" || env_key = "" then error_msg "no cert or key" else
+  let open Bos.OS in
+  Dir.user () >>= fun user ->
+  let cert_dir =
+    Fpath.add_seg user "certs"
+    |> Fpath.to_dir_path
+  in
+  Dir.create cert_dir >>= fun _ ->
 
-let cert_path () =
-  try Sys.getenv "HTTPS_SERVER_CERT"
-  with Not_found -> !cert_path
-
-
-let key_path () =
-  try Sys.getenv "HTTPS_SERVER_PRIVATE_KEY"
-  with Not_found -> !key_path
+  let file_cert = Fpath.add_seg cert_dir "public.cert"
+  and file_key  = Fpath.add_seg cert_dir "private.key" in
+  File.delete file_cert >>= fun () ->
+  File.delete file_key  >>= fun () ->
+  File.write file_cert env_cert >>= fun () ->
+  File.write file_key env_key   >>= fun () ->
+  ok (file_cert, file_key)
