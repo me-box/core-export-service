@@ -8,5 +8,6 @@ let () =
   Ok [
     Pkg.mllib ~api:["Export"] "src/databox-export-service.mllib";
     Pkg.bin "bin/service" ~dst:"databox-export-service";
-    Pkg.test "test/test"
+    Pkg.test "test/test_polling";
+    Pkg.test "test/test_ws"
   ]

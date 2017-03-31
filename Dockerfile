@@ -6,8 +6,8 @@ RUN opam depext -y conf-m4.1
 RUN opam depext -y conf-gmp.1
 RUN opam depext -y conf-perl.1
 
-RUN opam pin add -n sodium https://github.com/dsheets/ocaml-sodium.git
-RUN opam pin add -n macaroons https://github.com/sevenEng/ocaml-macaroons.git#fix
+RUN opam pin add -n sodium https://github.com/sevenEng/ocaml-sodium.git#with_auth_hmac256
+RUN opam pin add -n macaroons https://github.com/nojb/ocaml-macaroons.git
 RUN opam pin add -n depyt https://github.com/sevenEng/depyt.git#fix-opam
 RUN opam pin add -n opium https://github.com/sevenEng/opium.git#fix-ssl-option
 

@@ -91,6 +91,7 @@ let verify_path url caveat_str =
     false *)
 
 
+(*TODO: check destination for ws endpoint*)
 let verify_destination dest caveat_str =
   let expected = "destination = " ^ dest in
   expected = caveat_str
@@ -153,7 +154,7 @@ let extract_destination body =
     dest
   else
   let () = Logs.debug (fun m -> m
-    "[macaroon] get NOTHING for destination: decode error") in
+    "[macaroon] get NOTHING for destination: %s decode error" body) in
   ""
 
 
@@ -170,8 +171,8 @@ let macaroon_verifier_mw =
     let dest = extract_destination b in
 
     let macaroon = extract_macaroon headers in
-    (*let r = verify macaroon key uri meth dest in*)
-    let r = R.ok true in
+    let r = verify macaroon key uri meth dest in
+    (*let r = R.ok true in*)
 
     if R.is_error r then
       let msg =
@@ -202,3 +203,16 @@ let macaroon_verifier_mw =
         return @@ Response.create ~body ~code ()
   in
   Opium_rock.Middleware.create ~filter ~name:"Macaroon Verifier"
+
+
+let macaroon_request_checker request ~body =
+  let uri = Cohttp.Request.uri request
+  and meth = Cohttp.Request.meth request
+  and headers = Cohttp.Request.headers request in
+
+  let macaroon = extract_macaroon headers in
+  secret () >>= fun key ->
+
+  let r = verify macaroon key uri meth "" in
+
+  return (R.is_ok r && R.get_ok r)

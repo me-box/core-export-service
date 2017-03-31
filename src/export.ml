@@ -14,6 +14,19 @@ type queue = {
     push : request option -> unit; }
 
 
+let _queue = ref None
+let get_queue () =
+  match !_queue with
+  | Some q -> q
+  | None ->
+      let t, push = Lwt_stream.create () in
+      let stbl = Hashtbl.create 13 in
+      let etbl = Hashtbl.create 13 in
+      let queue = {t; stbl; etbl; push} in
+      let () = _queue := Some queue in
+      queue
+
+
 let new_request r q =
   let id = Uuidm.create `V4 in
   let request = {r with id} in
@@ -167,45 +180,23 @@ let base_app () =
   let p = Export_env.local_port () |> int_of_string in
   let () = Logs.info (fun m -> m "serving on port %d" p) in
 
-  let env_cert = Export_env.cert_path ()
-  and env_key  = Export_env.key_path () in
+  let cert, key =
+    match Export_env.init_certs () with
+    | Ok (cp, kp) -> Fpath.to_string cp, Fpath.to_string kp
+    | Error msg ->
+        Logs.debug(fun m ->
+            m "while installing https certs: %a" Rresult.R.pp_msg msg);
+        "", ""
+  in
 
   let app = App.empty |> App.port p in
 
-  if env_cert = "" || env_key = "" then app else
-  let open Bos.OS in
-  let open Rresult.R.Infix in
-  (Dir.user () >>= fun user ->
-  let cert_dir =
-    Fpath.add_seg user "certs"
-    |> Fpath.to_dir_path
-  in
-  Dir.create cert_dir >>= fun _ ->
-
-  let file_cert = Fpath.add_seg cert_dir "public.cert"
-  and file_key  = Fpath.add_seg cert_dir "private.key" in
-  File.delete file_cert >>= fun () ->
-  File.delete file_key  >>= fun () ->
-  File.write file_cert env_cert >>= fun () ->
-  File.write file_key env_key   >>= fun () ->
-  let cert = Fpath.to_string file_cert in
-  let key  = Fpath.to_string file_key in
-  Ok (cert, key))
-  |> function
-  | Error msg ->
-      Logs.err(fun m ->
-          m "while installing https certs: %a" Rresult.R.pp_msg msg);
-      app
-  | Ok (cert, key) ->
-      app |> App.ssl ~cert ~key
+  if cert = "" || key = "" then app else
+  app |> App.ssl ~cert ~key
 
 
-let t () =
-  let t, push = Lwt_stream.create () in
-  let stbl = Hashtbl.create 13 in
-  let etbl = Hashtbl.create 13 in
-  let queue = {t; stbl; etbl; push} in
-
+let polling () =
+  let queue = get_queue () in
   let app =
     base_app ()
     |> middleware Macaroon.macaroon_verifier_mw
@@ -221,3 +212,182 @@ let t () =
 
   Macaroon.init () >>= fun () ->
   Lwt.join [export_queue (); worker_t queue; ]
+
+
+
+let client_fr_handler push fr =
+  let open Websocket_cohttp_lwt.Frame in
+  let () = push @@ Some fr in
+  if fr.opcode = Opcode.Close then push None
+
+
+(* add tests about this and insert logging functions *)
+let ws_processor q fr_str push_fr () =
+  let client_con = Lwt_condition.create () in
+  let open Websocket_cohttp_lwt.Frame in
+  let rec listen_to_client () =
+    Lwt_stream.get fr_str >>= function
+    | Some fr when fr.opcode = Opcode.Text ->
+        let req = decode_request fr.content in
+        R.bind req (fun r ->
+            if r.id = Uuidm.nil then
+              let resp = new_request r q in
+              let v = `New resp.req_id in
+              R.ok @@ Lwt_condition.signal client_con @@ `Client v
+            else if not (Hashtbl.mem q.etbl r.id) then
+              let content =
+                Format.asprintf "not recognized id: %a" Uuidm.pp r.id in
+              let fr = create ~content () in
+              R.ok @@ push_fr @@ Some fr
+            else
+            let v = `Old r.id in
+            R.ok @@ Lwt_condition.signal client_con @@ `Client v)
+        |> (function
+          | Ok () -> listen_to_client ()
+          | Error msg ->
+              let fr = create ~content:msg () in
+              let () = push_fr @@ Some fr in
+              listen_to_client ())
+    | Some fr when fr.opcode = Opcode.Ping ->
+        let pong = create ~opcode:Opcode.Pong () in
+        let () = push_fr @@ Some pong in
+        listen_to_client ()
+    | Some fr when fr.opcode = Opcode.Close ->
+        let close =
+          if String.length fr.content >= 2 then
+            let content = String.sub fr.content 0 2 in
+            create ~opcode:Opcode.Close ~content ()
+          else close 1000
+        in
+        let () = Lwt_condition.signal client_con @@ `Client `Close in
+        let () = push_fr @@ Some close in
+        listen_to_client ()
+    | Some fr ->
+        Logs_lwt.warn (fun m -> m "unparsable frame: %a" pp fr)
+        >>= listen_to_client
+    | None ->
+        Logs_lwt.err (fun m -> m "client frame stream closed!")
+  in
+  let push_to_client () =
+    let push_frame resp =
+      json_of_response resp
+      |> Ezjsonm.to_string
+      |> fun content -> push_fr @@ Some (create ~content ())
+    in
+    let wait_on_id id =
+      let con = Hashtbl.find q.etbl id in
+      Lwt_condition.wait con >>= fun () ->
+      return @@ `Worker id
+    in
+    let clean_table id =
+      Hashtbl.remove q.stbl id;
+      Hashtbl.remove q.etbl id
+    in
+    let push_response id =
+      let state = Hashtbl.find q.stbl id in
+      match state  with
+      | `Finished ext_resp ->
+          let ext_response = Some ext_resp in
+          let response = {req_id = id; state; ext_response} in
+          push_frame response
+      | #state ->
+          let ext_response = None in
+          let response = {req_id = id; state; ext_response} in
+          push_frame response
+    in
+    let clean_up lt =
+      let rec aux acc =
+        Lwt.nchoose_split acc >>= fun (rts, nrts) ->
+        List.iter (function
+          | `Worker id -> clean_table id
+          (* shouldn't see others here*)
+          | _ -> ()) rts;
+        if List.length nrts <> 0 then aux nrts
+        else return_unit
+      in
+      aux lt
+    in
+    let is_finished id =
+      match Hashtbl.find q.stbl id with
+      | `Finished _ -> true
+      | _ -> false
+    in
+    let rec loop acc =
+      Lwt.nchoose_split acc >>= fun (rts, nrts) ->
+      let closed = ref false in
+      List.fold_left (fun acc rt -> match rt with
+        | `Client (`New id) ->
+            push_response id;
+            Lwt_condition.wait client_con
+            :: wait_on_id id
+            :: acc
+        | `Client (`Old id) ->
+            push_response id;
+            Lwt_condition.wait client_con :: acc
+        | `Client `Close ->
+            closed := true; acc
+        | `Worker id ->
+            if not !closed then push_response id;
+            if is_finished id then begin
+              clean_table id; acc end
+            else wait_on_id id :: acc) nrts rts
+      |> fun nrts -> if !closed then return nrts else loop nrts
+    in
+    loop [Lwt_condition.wait client_con]
+    >>= clean_up
+  in
+  listen_to_client () <&> push_to_client ()
+
+
+let handler q (flow, conn) req body =
+  Logs_lwt.info (fun m -> m "[ws] connection %s opened%!"
+      (Cohttp.Connection.to_string conn)) >>= fun () ->
+  Cohttp_lwt_body.to_string body >>= fun body ->
+  Macaroon.macaroon_request_checker req ~body >>= function
+  | true ->
+    let uri = Cohttp.Request.uri req in
+    let path = Uri.path uri in
+    (match path with
+    | "/ws/export" ->
+        let fr_str, push = Lwt_stream.create () in
+        let handler = client_fr_handler push in
+        Websocket_cohttp_lwt.upgrade_connection req flow handler
+        >>= fun (resp, body, push_frame) ->
+        Lwt.async @@ ws_processor q fr_str push_frame;
+        return (resp, body)
+    | _ ->
+        let resp = Cohttp.Response.make ~status:`Not_found () in
+        let body = Cohttp_lwt_body.empty in
+        return (resp, body))
+  | false ->
+  let resp = Cohttp.Response.make ~status:`Unauthorized () in
+  let body = Cohttp_lwt_body.of_string "Missing/Invalide API key/token" in
+  return (resp, body)
+
+
+let mode p =
+  match Export_env.init_certs () with
+  | Ok (cp, kp) ->
+      let config = `Crt_file_path (Fpath.to_string cp),
+                   `Key_file_path (Fpath.to_string kp),
+                   `No_password, `Port p in
+      `TLS config
+  | Error msg ->
+      Logs.debug(fun m ->
+          m "while installing https certs: %a" Rresult.R.pp_msg msg);
+      `TCP (`Port p)
+
+
+let ws ?(port = 8081) () =
+  let q = get_queue () in
+  let mode = mode port in
+  let conn_closed (_, conn) =
+    Logs.info (fun m -> m "[ws] connection %s closed%!"
+      (Cohttp.Connection.to_string conn))
+  in
+  let server = Cohttp_lwt_unix.Server.make ~conn_closed ~callback:(handler q) () in
+
+  Macaroon.init () >>= fun () ->
+  Lwt.join [
+    worker_t q;
+    Cohttp_lwt_unix.Server.create ~mode server]

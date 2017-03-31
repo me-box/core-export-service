@@ -6,6 +6,4 @@ val arbiter_endp : unit -> string
 
 val arbiter_token : unit -> string
 
-val cert_path : unit -> string
-
-val key_path : unit -> string
+val init_certs : unit -> (Fpath.t * Fpath.t, Rresult.R.msg) result

@@ -10,6 +10,8 @@ PKG bos
 PKG logs
 PKG rresult
 PKG depyt
+PKG conduit
+PKG websocket
 
 S src
 S test
