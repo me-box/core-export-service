@@ -93,8 +93,11 @@ let export_lp q =
   post "/lp/export" @@ handler q
 
 
-let base_app () =
-  let p = Export_env.local_port () |> int_of_string in
+let base_app ?port () =
+  let p =
+    match port with
+    | None -> Export_env.local_port () |> int_of_string
+    | Some p -> p in
   let () = Logs.info (fun m -> m "serving on port %d" p) in
 
   let cert, key =
@@ -112,13 +115,12 @@ let base_app () =
   app |> App.ssl ~cert ~key
 
 
-let polling () =
+let polling ?(lp = false) ?secret ?port () =
   let queue = W.get_queue () in
   let app =
-    base_app ()
+    base_app ?port ()
     |> middleware Macaroon.macaroon_verifier_mw
-    |> export queue
-    |> export_lp queue
+    |> if lp then export_lp queue else export queue
   in
 
   let export_queue () =
@@ -127,5 +129,5 @@ let polling () =
     | _ -> assert false
   in
 
-  Macaroon.init () >>= fun () ->
+  Macaroon.init ?secret () >>= fun () ->
   Lwt.join [export_queue (); W.worker_t queue; ]

@@ -1,1 +1,1 @@
-val ws : ?port:int -> unit -> unit Lwt.t
+val ws : ?secret:string -> ?port:int -> unit -> unit Lwt.t

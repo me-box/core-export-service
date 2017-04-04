@@ -164,8 +164,13 @@ let mode p =
       `TCP (`Port p)
 
 
-let ws ?(port = 8081) () =
+let ws ?secret ?port () =
   let q = W.get_queue () in
+  let port =
+    match port with
+    | None -> Export_env.local_port () |> int_of_string
+    | Some p -> p
+  in
   let mode = mode port in
   let conn_closed (_, conn) =
     Logs.info (fun m -> m "[ws] connection %s closed%!"
@@ -173,7 +178,7 @@ let ws ?(port = 8081) () =
   in
   let server = Cohttp_lwt_unix.Server.make ~conn_closed ~callback:(handler q) () in
 
-  Macaroon.init () >>= fun () ->
+  Macaroon.init ?secret () >>= fun () ->
   Lwt.join [
     W.worker_t q;
     Cohttp_lwt_unix.Server.create ~mode server]
