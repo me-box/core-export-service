@@ -12,7 +12,7 @@ include C.Constants
 
 let server () =
   C.set_environment ();
-  Lwt.join [C.start (); Export.polling ()]
+  Lwt.join [C.start (); Export_polling.polling ()]
 
 
 
