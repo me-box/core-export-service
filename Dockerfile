@@ -11,8 +11,6 @@ RUN opam pin add -n macaroons https://github.com/nojb/ocaml-macaroons.git
 RUN opam pin add -n depyt https://github.com/sevenEng/depyt.git#fix-opam
 RUN opam pin add -n opium https://github.com/sevenEng/opium.git#fix-ssl-option
 
-WORKDIR /home/opam
-
 ADD . databox-export-service
 
 RUN cd databox-export-service \
@@ -22,4 +20,8 @@ EXPOSE 8080
 
 LABEL databox.type="export-service"
 
-CMD ["databox-export-service"]
+RUN cd databox-export-service \
+ && sudo chmod +x shrink.sh \
+ && sudo ./shrink.sh
+
+ENTRYPOINT ["./export-service"]
