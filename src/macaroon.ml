@@ -29,7 +29,10 @@ let get_secret () =
     return_unit
 
 
-let init = get_secret
+let init ?secret () =
+  match secret with
+  | None -> get_secret ()
+  | Some s' -> s := Some s'; return_unit
 
 
 let secret () =

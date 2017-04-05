@@ -1,8 +1,9 @@
 true : bin_annot, safe_string, package(bytes)
 
 true : package(lwt, macaroons, macaroons.sodium, opium, opium.unix)
-true : package(cohttp, cohttp.lwt, logs, logs.fmt, logs.lwt, uuidm, rresult, depyt, bos)
+true : package(cohttp, cohttp.lwt, logs, logs.fmt, logs.lwt, logs.cli, uuidm, rresult, depyt, bos)
 true : package(websocket, websocket.cohttp, websocket.lwt)
+true : package(cmdliner)
 
 <src> : include
 <test> : include

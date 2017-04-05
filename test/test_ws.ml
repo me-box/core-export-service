@@ -10,7 +10,7 @@ let server () =
   C.set_environment ();
   let port = server_port in
   Logs_lwt.info (fun m -> m "[test] ws server running...") >>= fun () ->
-  Lwt.join [C.start (); Export.ws ~port ()]
+  Lwt.join [C.start (); Export_ws.ws ~port ()]
 
 
 let get_macaroon () =

@@ -12,6 +12,7 @@ PKG rresult
 PKG depyt
 PKG conduit
 PKG websocket
+PKG cmdliner
 
 S src
 S test

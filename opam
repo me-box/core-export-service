@@ -16,18 +16,22 @@ depends: [
   "topkg" {build}
 
   "lwt"
-  "fmt"
   "tls"
   "opium"
   "cohttp"
+  "websocket"
+
   "sodium"
   "macaroons"
+
+  "fmt"
   "logs"
   "uuidm"
   "rresult"
-  "depyt"
   "bos"
-  "websocket"
+  "cmdliner"
+
+  "depyt"
 ]
 
 

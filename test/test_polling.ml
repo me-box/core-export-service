@@ -10,9 +10,15 @@ module R        = Rresult.R
 include C.Constants
 
 
+let lp_export_port = "8088"
 let server () =
   C.set_environment ();
-  Lwt.join [C.start (); Export.polling ()]
+  let port = int_of_string lp_export_port in
+  Lwt.join [
+    C.start ();
+    Export_polling.polling ();
+    Export_polling.polling ~lp:true ~port ()
+  ]
 
 
 
@@ -507,7 +513,7 @@ module Test_client'' = struct
     in
     let rec step1 =
       let uri timeout =
-        let uri' = Uri.of_string ("http://127.0.0.1:" ^ export_port) in
+        let uri' = Uri.of_string ("http://127.0.0.1:" ^ lp_export_port) in
         let with_path = Uri.with_path uri' "/lp/export" in
         let with_param = Uri.add_query_param' with_path ("timeout", timeout) in
         with_param
