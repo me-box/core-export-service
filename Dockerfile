@@ -1,27 +1,28 @@
-FROM ocaml/opam:alpine
+FROM alpine:3.5
 
-RUN sudo apk add libsodium-dev libffi-dev
+LABEL distro_style="apk" distro="alpine" distro_long="alpine" arch="x86_64" ocaml_version="4.04.0" opam_version="1.2" operatingsystem="linux"
 
-RUN opam depext -y conf-m4.1
-RUN opam depext -y conf-gmp.1
-RUN opam depext -y conf-perl.1
+RUN apk update && apk upgrade \
+ && apk add alpine-sdk bash ncurses-dev \
+ && adduser -S databox \
+ && echo 'databox ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/databox \
+ && chmod 440 /etc/sudoers.d/databox \
+ && chown root:root /etc/sudoers.d/databox \
+ && sed -i.bak 's/^Defaults.*requiretty//g' /etc/sudoers
 
-RUN opam pin add -n sodium https://github.com/sevenEng/ocaml-sodium.git#with_auth_hmac256
-RUN opam pin add -n macaroons https://github.com/nojb/ocaml-macaroons.git
-RUN opam pin add -n depyt https://github.com/sevenEng/depyt.git#fix-opam
-RUN opam pin add -n opium https://github.com/sevenEng/opium.git#fix-ssl-option
+USER databox
+WORKDIR /home/databox
 
 ADD . databox-export-service
 
-RUN cd databox-export-service \
- && opam pin add -y databox-export-service .
+RUN sudo apk add opam \
+ && cd databox-export-service \
+ && sudo chmod +x install.sh && sync \
+ && ./install.sh \
+ && sudo apk del opam
 
 EXPOSE 8080
 
 LABEL databox.type="export-service"
-
-RUN cd databox-export-service \
- && sudo chmod +x shrink.sh \
- && sudo ./shrink.sh
 
 ENTRYPOINT ["./export-service"]
