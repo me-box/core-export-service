@@ -13,6 +13,7 @@ PKG depyt
 PKG conduit
 PKG websocket
 PKG cmdliner
+PKG mtime.os
 
 S src
 S test

@@ -93,6 +93,17 @@ let export_lp q =
   post "/lp/export" @@ handler q
 
 
+let dump =
+  let handler _ =
+    Logs_lwt.info (fun m -> m "starting dumping stats ...") >>= fun () ->
+    let r = Export_stats.dump () in
+    Logs_lwt.info (fun m -> m "finished dumping.") >>= fun () ->
+    if R.is_ok r then respond' @@ `String ""
+    else respond' @@ `String (R.get_error r)
+  in
+  get "/dump" handler
+
+
 let base_app ?port () =
   let p =
     match port with
@@ -120,11 +131,13 @@ let polling ?(lp = false) ?secret ?port () =
   let app =
     base_app ?port ()
     |> middleware Macaroon.macaroon_verifier_mw
+    |> dump
     |> if lp then export_lp queue else export queue
   in
 
+  let argv = Array.of_list ["opium"] in
   let export_queue () =
-    match App.run_command' app with
+    match App.run_command' ~argv app with
     | `Ok t -> t
     | _ -> assert false
   in
