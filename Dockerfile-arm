@@ -1,0 +1,8 @@
+FROM armhf/alpine:3.5
+
+EXPOSE 8080
+
+LABEL databox.type="export-service"
+
+CMD ["sleep","2147483647"]
+
