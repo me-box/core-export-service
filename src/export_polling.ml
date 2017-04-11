@@ -123,8 +123,9 @@ let polling ?(lp = false) ?secret ?port () =
     |> if lp then export_lp queue else export queue
   in
 
+  let argv = Array.of_list ["opium"] in
   let export_queue () =
-    match App.run_command' app with
+    match App.run_command' ~argv app with
     | `Ok t -> t
     | _ -> assert false
   in
