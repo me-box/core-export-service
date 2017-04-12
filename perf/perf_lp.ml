@@ -29,15 +29,19 @@ let dmp_m =
   M.serialize m
 
 
-let gen_body id =
+let gen_body id payload =
+  let data =
+    if payload = 0 then `O []
+    else `O ["v", `String (Bytes.make payload 'v')]
+  in
   let obj = `O [
       "id", `String id;
       "uri", `String "http://127.0.0.1:8088/export";
-      "data", `String (Ezjsonm.to_string (`O []))] in
+      "data", `String (Ezjsonm.to_string data)] in
   Ezjsonm.to_string obj
 
 
-let issue_requests cnt =
+let issue_requests cnt payload =
   let uri = Uri.of_string "http://127.0.0.1:8080/lp/export" in
   let fail = ref 0 in
   let request () =
@@ -59,10 +63,10 @@ let issue_requests cnt =
           |> fun dic ->
           let id = List.assoc "id" dic |> get_string in
           let state = List.assoc "state" dic |> get_string in
-          if state <> "Finished" then aux (gen_body id)
+          if state <> "Finished" then aux (gen_body id 0)
           else return_unit)
       end in
-    aux (gen_body "")
+    aux (gen_body "" payload)
   in
   let gen_requests cnt =
     let rec aux i acc =
@@ -90,6 +94,9 @@ let dump_stats () =
 
 
 let () =
-  let cnt = try Sys.argv.(2) |> int_of_string with _ -> 10 in
-  (issue_requests cnt >>= dump_stats)
+  Printf.printf "argv: %s\n%!" (String.concat " " (Array.to_list Sys.argv));
+  let cnt = try Sys.argv.(1) |> int_of_string with _ -> 10 in
+  let payload = try Sys.argv.(2) |> int_of_string with _ -> 0 in
+  Printf.printf "issuing %d requests, each with %d bytes payload:\n%!" cnt payload;
+  (issue_requests cnt payload >>= dump_stats)
   |> Lwt_main.run

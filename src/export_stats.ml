@@ -32,18 +32,18 @@ let dump () =
   List.iter (fun (tm, ev) -> match ev with
     | `Created id ->
         assert (not @@ Hashtbl.mem lc id);
-        Hashtbl.add lc id [tm];
+        let arr = Array.create_float 3 in
+        arr.(0) <- tm;
+        Hashtbl.add lc id arr;
         incr cnt;
         let entry = Printf.sprintf "%f %d\n" tm !cnt in
         Buffer.add_string cnt_buf entry
     | `Processing id ->
-        assert (Hashtbl.mem lc id && 1 = List.length @@ Hashtbl.find lc id);
-        let l' = Hashtbl.find lc id in
-        Hashtbl.replace lc id (tm :: l')
+        let arr = Hashtbl.find lc id in
+        arr.(1) <- tm;
     | `Finished id ->
-        assert (Hashtbl.mem lc id && 2 = List.length @@ Hashtbl.find lc id);
-        let l' = Hashtbl.find lc id in
-        Hashtbl.replace lc id (tm :: l');
+        let arr = Hashtbl.find lc id in
+        arr.(2) <- tm;
         decr cnt;
         let entry = Printf.sprintf "%f %d\n" tm !cnt in
         Buffer.add_string cnt_buf entry
@@ -53,10 +53,9 @@ let dump () =
         Buffer.add_string bw_buf entry) ts;
 
   let lc_buf = Buffer.create 997 in
-  Hashtbl.iter (fun id evs ->
-      let evs = List.map string_of_float evs |> String.concat " " in
-      let entry = Printf.sprintf "%s %s\n"
-          (String.sub (Uuidm.to_string id) 0 8) evs in
+  Hashtbl.iter (fun id arr ->
+      let entry = Printf.sprintf "%s %f %f %f\n"
+          (String.sub (Uuidm.to_string id) 0 8) arr.(0) arr.(1) arr.(2) in
       Buffer.add_string lc_buf entry) lc;
 
   Hashtbl.clear t;

@@ -1,7 +1,7 @@
 #!/bin/ocaml
 
 #use "topfind";;
-#require "lwt";;
+#require "lwt.unix";;
 #require "cohttp.lwt";;
 #require "cohttp.lwt-core";;
 
@@ -15,6 +15,7 @@ let callback (_, conn) req body =
   let meth = Cohttp.Request.meth req in
   let path = Cohttp.Request.uri req |> Uri.path in
   if meth = `POST && path = "/export" then
+    Lwt_unix.sleep 0.1 >>= fun () ->
     Server.respond ~status:`OK ~body:Cohttp_lwt_body.empty ()
   else Server.respond_not_found ()
 
