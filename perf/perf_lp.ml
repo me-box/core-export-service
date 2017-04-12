@@ -44,7 +44,7 @@ let gen_body id payload =
 let issue_requests cnt payload =
   let uri = Uri.of_string "http://127.0.0.1:8080/lp/export" in
   let fail = ref 0 in
-  let request () =
+  let request i =
     let rec aux b =
       let body = Cohttp_lwt_body.of_string b in
       let headers = Cohttp.Header.init_with "x-api-key" exp_m in
@@ -66,12 +66,13 @@ let issue_requests cnt payload =
           if state <> "Finished" then aux (gen_body id 0)
           else return_unit)
       end in
+    Printf.printf "[client] request %d\n%!" i;
     aux (gen_body "" payload)
   in
   let gen_requests cnt =
     let rec aux i acc =
       if i = cnt then acc
-      else aux (i + 1) (request () :: acc)
+      else aux (i + 1) (request i :: acc)
     in
     aux 0 []
   in
