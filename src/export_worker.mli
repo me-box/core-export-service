@@ -2,7 +2,7 @@ type queue
 
 type id = Uuidm.t
 
-val get_queue : unit -> queue
+val create_queue : owner:string -> queue
 
 val new_request : Export_typ.request -> queue -> Export_typ.response
 

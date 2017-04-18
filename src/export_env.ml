@@ -1,4 +1,4 @@
-let local_name = ref "databox-export-bridge"
+let local_name = ref "databox-export-service"
 let local_port = ref "8080"
 
 let arbiter_endpoint = ref "https://databox-arbiter:8080"

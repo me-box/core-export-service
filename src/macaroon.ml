@@ -160,6 +160,15 @@ let extract_destination body =
     "[macaroon] get NOTHING for destination: %s decode error" body) in
   ""
 
+let with_client_id req id =
+  let r = Request.request req in
+  let headers =
+    let h = Cohttp.Request.headers r in
+    Cohttp.Header.add h "macaroon-client-id" id
+  in
+  let nr = Fieldslib.Field.fset Cohttp.Request.Fields.headers r headers in
+  Request.({req with request = nr})
+
 
 let macaroon_verifier_mw =
   let filter = fun handler req ->
@@ -195,7 +204,8 @@ let macaroon_verifier_mw =
     | true ->
         Logs_lwt.info (fun m -> m "[macaroon] macaroon verification passes") >>= fun () ->
         let b = Cohttp_lwt_body.of_string b in
-        let req = Request.({req with body = b}) in
+        let id = Macaroon.identifier @@ R.get_ok macaroon in
+        let req = Request.({(with_client_id req id)  with body = b}) in
         handler req
     | false ->
         let info = "Invalid API key/token" in

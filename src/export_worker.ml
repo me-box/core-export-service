@@ -8,21 +8,17 @@ type queue = {
     t    : request Lwt_stream.t;
     stbl : (id, state) Hashtbl.t;
     etbl : (id, unit Lwt_condition.t) Hashtbl.t;
-    push : request option -> unit; }
+    push : request option -> unit;
+    owner: string}
 and id = Uuidm.t
 
 
-let _queue = ref None
-let get_queue () =
-  match !_queue with
-  | Some q -> q
-  | None ->
-      let t, push = Lwt_stream.create () in
-      let stbl = Hashtbl.create 13 in
-      let etbl = Hashtbl.create 13 in
-      let queue = {t; stbl; etbl; push} in
-      let () = _queue := Some queue in
-      queue
+let create_queue ~owner =
+  let t, push = Lwt_stream.create () in
+  let stbl = Hashtbl.create 13 in
+  let etbl = Hashtbl.create 13 in
+  let queue = {t; stbl; etbl; push; owner} in
+  queue
 
 
 let new_request r q =
@@ -92,7 +88,8 @@ let worker_t q =
     | None -> Logs_lwt.warn (fun m -> m "Got None...(stream closed?)")
     | Some r ->
         process r >>= fun () ->
-        Logs_lwt.info (fun m -> m "Finished processing of a request!") >>=
-        aux
+        Logs_lwt.info (fun m ->
+            m "Finished processing of a request for %s!" q.owner)
+        >>= aux
   in
   aux ()
