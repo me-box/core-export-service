@@ -165,7 +165,7 @@ let mode p =
 
 
 let ws ?secret ?port () =
-  let q = W.get_queue () in
+  let q = W.create_queue ~owner:"ws" in
   let port =
     match port with
     | None -> Export_env.local_port () |> int_of_string
