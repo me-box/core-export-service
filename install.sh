@@ -13,9 +13,9 @@ opam pin add -n macaroons https://github.com/me-box/ocaml-macaroons.git
 opam pin add -n depyt https://github.com/me-box/depyt.git#fix-opam
 opam pin add -n opium https://github.com/me-box/opium.git#fix-ssl-option
 
-opam pin add -y databox-export-service .
+opam pin add -y export-service .
 
-mv /home/databox/.opam/system/bin/databox-export-service /home/databox/export-service
+mv /home/databox/.opam/system/bin/export-service /home/databox/service
 rm -rf /home/databox/.opam
 
 sudo apk del m4 perl
