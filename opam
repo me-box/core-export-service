@@ -2,10 +2,10 @@ opam-version: "1.2"
 maintainer: "Qi Li <liqi0425@gmail.com>"
 authors: ["Qi Li <liqi0425@gmail.com>"]
 version: "0.0.1"
-homepage: "https://github.com/me-box/databox-export-service"
+homepage: "https://github.com/me-box/core-export-service"
 license: "MIT"
-dev-repo: "https://github.com/me-box/databox-export-service.git"
-bug-reports: "https://github.com/me-box/databox-export-service/issues"
+dev-repo: "https://github.com/me-box/core-export-service.git"
+bug-reports: "https://github.com/me-box/core-export-service/issues"
 tags: []
 
 available: [ ocaml-version >= "4.01.0"]

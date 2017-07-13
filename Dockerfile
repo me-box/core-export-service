@@ -13,11 +13,11 @@ RUN apk update && apk upgrade \
 USER databox
 WORKDIR /home/databox
 
-ADD . databox-export-service
+ADD . export-service
 
 RUN sudo apk add alpine-sdk bash ncurses-dev \
  && sudo apk add opam \
- && cd databox-export-service \
+ && cd export-service \
  && sudo chmod +x install.sh && sync \
  && ./install.sh \
  && sudo apk del alpine-sdk bash ncurses-dev \
@@ -27,4 +27,4 @@ EXPOSE 8080
 
 LABEL databox.type="export-service"
 
-ENTRYPOINT ["./export-service"]
+ENTRYPOINT ["./service"]
