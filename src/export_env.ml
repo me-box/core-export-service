@@ -1,7 +1,7 @@
-let local_name = ref "databox-export-service"
+let local_name = ref "export-service"
 let local_port = ref "8080"
 
-let arbiter_endpoint = ref "https://databox-arbiter:8080"
+let arbiter_endpoint = ref "https://arbiter:8080"
 let arbiter_key = ref ""
 
 let secrets_dir = Fpath.v "/run/secrets/"
