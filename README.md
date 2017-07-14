@@ -1,22 +1,21 @@
-databox-export-service - export service for databox platform
+databox-export-service - export service for databox platform [![Build Status](https://travis-ci.org/me-box/core-export-service.svg?branch=master)](https://travis-ci.org/me-box/core-export-service)
 -------------------------------------------------------------------------------
 %%VERSION%%
 
-databox-export-service is distributed under the MIT license.
+core-export-service is distributed under the MIT license.
 
-Homepage: https://github.com/me-box/databox-export-service
+Homepage: https://github.com/me-box/core-export-service
 
 ## Installation
 
-databox-export-service can be installed with `opam`:
-
-	opam pin -n add databox-export-service https://github.com/me-box/databox-export-service.git
-    opam install databox-bridge
-
-
-Or build your own docker image:
+Build your own docker image:
 
     docker build -t <image name> .
+
+export-service can be installed with `opam`:
+
+	opam pin -n add export-service https://github.com/me-box/core-export-service.git
+    opam install export-service
 
 The docker container solution is recommended, as there are extra system dependencies and local package pins to make it work for the `opam` installation. All of this has been taken care of by steps in Dockerfile.
 

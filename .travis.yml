@@ -1,0 +1,11 @@
+sudo: required
+
+services:
+  - docker
+
+language: c
+
+before_install:
+  - docker pull alpine:3.5
+
+script: docker build -t export-service .
