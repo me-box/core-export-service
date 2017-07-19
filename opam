@@ -11,9 +11,9 @@ tags: []
 available: [ ocaml-version >= "4.01.0"]
 
 depends: [
-  "ocamlfind" {build}
-  "ocamlbuild" {build}
-  "topkg" {build}
+  "ocamlfind"      {build}
+  "ocamlbuild"     {build}
+  "topkg"          {build}
 
   "lwt"
   "tls"
@@ -22,8 +22,6 @@ depends: [
   "websocket"
 
   "sodium"
-  "macaroons"
-
   "fmt"
   "logs"
   "uuidm"
@@ -31,7 +29,8 @@ depends: [
   "bos"
   "cmdliner"
 
-  "depyt"
+  "depyt"     {>= "0.2.0"}
+  "macaroons" {>= "0.1.1"}
 ]
 
 
