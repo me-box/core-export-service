@@ -36,7 +36,7 @@ let arbiter_token () =
         ""
   end
 
-
+(* deprecated
 let init_certs () =
   let open Rresult.R in
   let file_pem = Fpath.add_seg secrets_dir "DATABOX_EXPORT_SERVICE_PEM.json" in
@@ -66,3 +66,9 @@ let init_certs () =
     File.write file_key env_key   >>= fun () ->
     ok (file_cert, file_key)
   end
+*)
+
+let init_https () =
+  let file_cert = Fpath.add_seg secrets_dir "DATABOX_EXPORT_SERVICE.pem" in
+  let file_key  = Fpath.add_seg secrets_dir "DATABOX_EXPORT_SERVICE.pem" in
+  Rresult.R.ok (file_cert, file_key)

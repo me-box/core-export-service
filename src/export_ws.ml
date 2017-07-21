@@ -152,7 +152,7 @@ let handler q (flow, conn) req body =
 
 
 let mode p =
-  match Export_env.init_certs () with
+  match Export_env.init_https () with
   | Ok (cp, kp) ->
       let config = `Crt_file_path (Fpath.to_string cp),
                    `Key_file_path (Fpath.to_string kp),
