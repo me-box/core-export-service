@@ -116,7 +116,7 @@ let base_app ?port () =
   let () = Logs.info (fun m -> m "serving on port %d" p) in
 
   let cert, key =
-    match Export_env.init_certs () with
+    match Export_env.init_https () with
     | Ok (cp, kp) -> Fpath.to_string cp, Fpath.to_string kp
     | Error msg ->
         Logs.debug(fun m ->
