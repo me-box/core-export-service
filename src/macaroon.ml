@@ -25,7 +25,8 @@ let get_secret () =
     return_unit
   else
     Cohttp_lwt_body.to_string body >>= fun body ->
-    s := Some (B64.decode body);
+    s := Some body;
+    (*s := Some (B64.decode body);*)
     return_unit
 
 
