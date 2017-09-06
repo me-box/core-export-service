@@ -14,39 +14,55 @@ let get_secret () =
   let h = ["X-Api-Key", Export_env.arbiter_token ()] in
   let headers = Cohttp.Header.of_list h in
 
-  Client.get ~headers url >>= fun (resp, body) ->
-  let status = Cohttp.Response.status resp in
-  let code = Cohttp.Code.code_of_status status in
+  Lwt.catch
+    (fun () ->
+       Client.get ~headers url >>= fun (resp, body) ->
+       let status = Cohttp.Response.status resp in
+       let code = Cohttp.Code.code_of_status status in
 
-  if not @@ Cohttp.Code.is_success code then
-    Cohttp_lwt_body.to_string body >>= fun err_msg ->
-    Logs_lwt.err (fun m -> m "[macaroon] no secret from arbiter: %s" err_msg)
-    >>= fun () ->
-    return_unit
-  else
-    Cohttp_lwt_body.to_string body >>= fun body ->
-    s := Some (B64.decode body);
-    return_unit
+       if not @@ Cohttp.Code.is_success code then
+         Cohttp_lwt_body.to_string body >>= fun err_msg ->
+         Logs_lwt.err (fun m -> m "[macaroon] no secret from arbiter: %s" err_msg)
+         >>= fun () ->
+         return_unit
+       else
+       Cohttp_lwt_body.to_string body >>= fun body ->
+       s := Some body;
+       (*s := Some (B64.decode body);*)
+       return_unit)
+    (fun exn ->
+       Logs_lwt.err (fun m -> m "[macaroon] get_secret: %s" (Printexc.to_string exn)))
+
+
+let init_secret () =
+  (* account for failures before arbiter gets up and responds *)
+  let repeat = 5 in
+  let () = Random.init (Unix.time () |> int_of_float) in
+  let euler = 2.718 in
+  let rec aux cnt bound =
+    match !s with
+    | None ->
+        if cnt > repeat then return @@ R.error_msg "Can't get macaroon secret"
+        else
+          let span = max 7. @@ Random.float bound in
+          Logs_lwt.info (fun m -> m "[macaroon] sleep %.3f s" span) >>= fun () ->
+          Lwt_unix.sleep span >>= fun () ->
+          Logs_lwt.info (fun m -> m "[macaroon] try to get macaroon secret %d/%d" cnt repeat)
+          >>= get_secret
+          >>= fun () -> aux (succ cnt) (bound *. euler)
+    | Some s -> return @@ R.ok s
+  in
+  aux 1 euler
 
 
 let init ?secret () =
   match secret with
-  | None -> get_secret ()
+  | None ->
+      init_secret () >>= (function
+      | Ok s -> Logs_lwt.info (fun m -> m "[macaroon] got secret! %s" s)
+      | Error (`Msg err) -> Logs_lwt.err (fun m -> m "[macaroon] no secret: %s" err))
   | Some s' -> s := Some s'; return_unit
 
-
-let secret () =
-  let repeat = 3 in
-  let rec aux cnt =
-    match !s with
-    | None ->
-        if cnt >= repeat then return @@ R.error_msg "Can't get macaroon secret"
-        else Logs_lwt.debug (fun m -> m
-          "[macaroon] try to get macaroon secret %d/%d" cnt repeat)
-          >>= get_secret >>= fun () -> aux @@ succ cnt
-    | Some s -> return @@ R.ok s
-  in
-  aux 1
 
 
 let verify_target caveat_str =
@@ -172,7 +188,7 @@ let with_client_id req id =
 
 let macaroon_verifier_mw =
   let filter = fun handler req ->
-    secret () >>= fun key ->
+    init_secret () >>= fun key ->
 
     let uri = Request.uri req in
     let meth = Request.meth req in
@@ -224,7 +240,7 @@ let macaroon_request_checker request ~body =
   and headers = Cohttp.Request.headers request in
 
   let macaroon = extract_macaroon headers in
-  secret () >>= fun key ->
+  init_secret () >>= fun key ->
 
   let r = verify macaroon key uri meth "" in
 

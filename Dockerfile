@@ -16,4 +16,4 @@ EXPOSE 8080
 
 LABEL databox.type="export-service"
 
-CMD ["./service"]
+CMD ["./service", "-v"]

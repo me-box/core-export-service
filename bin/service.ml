@@ -6,7 +6,7 @@ let endpoint =
     `Long_polling, Arg.info ["long-polling"] ~doc:"long-polling version of the service";
     `Websocket, Arg.info ["websocket"] ~doc:"websocket version of the service"
   ] in
-  Arg.(value & vflag `Polling & typs)
+  Arg.(value & vflag `Long_polling & typs)
 
 
 let secret =
