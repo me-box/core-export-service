@@ -1,30 +1,19 @@
-FROM alpine:3.5
+FROM databoxsystems/base-image-ocaml:alpine-3.4_ocaml-4.04.2 as BUILDER
 
-LABEL distro_style="apk" distro="alpine" distro_long="alpine" arch="x86_64" ocaml_version="4.04.0" opam_version="1.2" operatingsystem="linux"
+WORKDIR /export-service
+ADD . .
 
-RUN apk update && apk upgrade \
- && apk add sudo \
- && adduser -S databox \
- && echo 'databox ALL=(ALL:ALL) NOPASSWD:ALL' > /etc/sudoers.d/databox \
- && chmod 440 /etc/sudoers.d/databox \
- && chown root:root /etc/sudoers.d/databox \
- && sed -i.bak 's/^Defaults.*requiretty//g' /etc/sudoers
+RUN opam pin add -y export-service /export-service
 
-USER databox
-WORKDIR /home/databox
 
-ADD . export-service
+FROM alpine:3.4
 
-RUN sudo apk add alpine-sdk bash ncurses-dev \
- && sudo apk add opam \
- && cd export-service \
- && sudo chmod +x install.sh && sync \
- && ./install.sh \
- && sudo apk del alpine-sdk bash ncurses-dev \
- && sudo apk del opam
+WORKDIR /core-export-service
+RUN apk update && apk add libsodium-dev gmp-dev
+COPY --from=BUILDER /home/opam/.opam/4.04.2/bin/export-service service
 
 EXPOSE 8080
 
 LABEL databox.type="export-service"
 
-ENTRYPOINT ["./service"]
+CMD ["./service"]
