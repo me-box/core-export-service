@@ -26,7 +26,8 @@ let arbiter_token () =
   if !arbiter_key <> "" then !arbiter_key
   else begin
     let file_token = Fpath.add_seg secrets_dir "DATABOX_EXPORT_SERVICE_KEY" in
-    Rresult.R.map B64.decode (Bos.OS.File.read file_token)
+    Rresult.R.map B64.encode (Bos.OS.File.read file_token)
+    (*Rresult.R.map B64.decode (Bos.OS.File.read file_token)*)
     |> function
     | Ok token ->
         arbiter_key := token;
