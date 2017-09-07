@@ -44,7 +44,7 @@ let init_secret () =
     | None ->
         if cnt > repeat then return @@ R.error_msg "Can't get macaroon secret"
         else
-          let span = max 7. @@ Random.float bound in
+          let span = min 7. @@ Random.float bound in
           Logs_lwt.info (fun m -> m "[macaroon] sleep %.3f s" span) >>= fun () ->
           Lwt_unix.sleep span >>= fun () ->
           Logs_lwt.info (fun m -> m "[macaroon] try to get macaroon secret %d/%d" cnt repeat)
