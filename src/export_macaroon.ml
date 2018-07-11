@@ -21,12 +21,12 @@ let get_secret () =
        let code = Cohttp.Code.code_of_status status in
 
        if not @@ Cohttp.Code.is_success code then
-         Cohttp_lwt_body.to_string body >>= fun err_msg ->
+         Cohttp_lwt.Body.to_string body >>= fun err_msg ->
          Logs_lwt.err (fun m -> m "[macaroon] no secret from arbiter: %s" err_msg)
          >>= fun () ->
          return_unit
        else
-       Cohttp_lwt_body.to_string body >>= fun body ->
+       Cohttp_lwt.Body.to_string body >>= fun body ->
        s := Some body;
        (*s := Some (B64.decode body);*)
        return_unit)
@@ -117,7 +117,7 @@ let verify_destination dest caveat_str =
 
 
 (*let extract_destination body =
-  Cohttp_lwt_body.to_string body >>= fun body ->
+  Cohttp_lwt.Body.to_string body >>= fun body ->
   let open Ezjsonm in
   let dic = from_string body |> value |> get_dict in
   let dest = List.assoc "dest" dic in
@@ -195,7 +195,7 @@ let macaroon_verifier_mw =
     let headers = Request.headers req in
 
     let body = Request.body req in
-    Cohttp_lwt_body.to_string body >>= fun b ->
+    Cohttp_lwt.Body.to_string body >>= fun b ->
     let dest = extract_destination b in
 
     let macaroon = extract_macaroon headers in
@@ -212,14 +212,14 @@ let macaroon_verifier_mw =
       let info = Printf.sprintf "macaroon verification fails: %s" msg in
       Logs_lwt.info (fun m -> m "[macaroon] %s" info) >>= fun () ->
 
-      let body = Cohttp_lwt_body.of_string info in
+      let body = Cohttp_lwt.Body.of_string info in
       let code = `Unauthorized in
       return @@ Response.create ~body ~code ()
 
     else match R.get_ok r with
     | true ->
         Logs_lwt.info (fun m -> m "[macaroon] macaroon verification passes") >>= fun () ->
-        let b = Cohttp_lwt_body.of_string b in
+        let b = Cohttp_lwt.Body.of_string b in
         let id = Macaroon.identifier @@ R.get_ok macaroon in
         let req = Request.({(with_client_id req id)  with body = b}) in
         handler req
@@ -227,11 +227,11 @@ let macaroon_verifier_mw =
         let info = "Invalid API key/token" in
         Logs_lwt.info (fun m -> m "[macaroon] %s" info) >>= fun () ->
 
-        let body = Cohttp_lwt_body.of_string info in
+        let body = Cohttp_lwt.Body.of_string info in
         let code = `Unauthorized in
         return @@ Response.create ~body ~code ()
   in
-  Opium_rock.Middleware.create ~filter ~name:"Macaroon Verifier"
+  Opium_kernel.Rock.Middleware.create ~filter ~name:"Macaroon Verifier"
 
 
 let macaroon_request_checker request ~body =

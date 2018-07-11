@@ -13,7 +13,7 @@ let export f =
       let headers = Request.headers req in
       Cohttp.Header.get headers "macaroon-client-id"
     in
-    Cohttp_lwt_body.to_string body >>= fun body ->
+    Cohttp_lwt.Body.to_string body >>= fun body ->
     Logs_lwt.info (fun m -> m "body: %s" body) >>= fun () ->
 
     let request = decode_request body in
@@ -66,7 +66,7 @@ let export_lp f =
       let headers = Request.headers req in
       Cohttp.Header.get headers "macaroon-client-id"
     in
-    Cohttp_lwt_body.to_string body >>= fun body ->
+    Cohttp_lwt.Body.to_string body >>= fun body ->
     Logs_lwt.info (fun m -> m "body: %s" body) >>= fun () ->
 
     let timeout = get_timeout_param req in
@@ -134,7 +134,7 @@ let polling ?(lp = false) ?secret ?port () =
   let f_t, factory = F.init () in
   let app =
     base_app ?port ()
-    |> middleware Macaroon.macaroon_verifier_mw
+    |> middleware Export_macaroon.macaroon_verifier_mw
     |> if lp then export_lp factory else export factory
   in
 
@@ -145,5 +145,5 @@ let polling ?(lp = false) ?secret ?port () =
     | _ -> assert false
   in
 
-  Macaroon.init ?secret () >>= fun () ->
+  Export_macaroon.init ?secret () >>= fun () ->
   Lwt.join [export_queue (); f_t (); ]

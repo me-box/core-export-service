@@ -1,0 +1,7 @@
+(jbuild_version 1)
+
+(executables
+  ((names (service))
+   (libraries
+     (lwt lwt.unix logs logs.cli logs.fmt cmdliner uuidm fpath rresult bos
+      opium opium_kernel websocket-lwt.cohttp depyt sodium macaroons macaroons.sodium))))
