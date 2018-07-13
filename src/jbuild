@@ -1,7 +1,10 @@
 (jbuild_version 1)
 
-(executables
-  ((names (service))
+(executable
+  ((name service)
    (libraries
      (lwt lwt.unix logs logs.cli logs.fmt cmdliner uuidm fpath rresult bos
-      opium opium_kernel websocket-lwt.cohttp depyt sodium macaroons macaroons.sodium))))
+      opium opium_kernel websocket-lwt.cohttp depyt sodium macaroons macaroons.sodium
+      lwt-zmq bitstring))
+   (preprocess  (pps (ppx_bitstring)))
+  ))

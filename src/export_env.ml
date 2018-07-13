@@ -1,9 +1,6 @@
 let local_name = ref "export-service"
 let local_port = ref "8080"
 
-let arbiter_endpoint = ref "https://arbiter:8080"
-let arbiter_key = ref ""
-
 let secrets_dir = Fpath.v "/run/secrets/"
 
 
@@ -17,25 +14,29 @@ let local_port () =
   with Not_found -> !local_port
 
 
-let arbiter_endp () =
-  try Sys.getenv "DATABOX_ARBITER_ENDPOINT"
-  with Not_found -> !arbiter_endpoint
-
-
 let arbiter_token () =
-  if !arbiter_key <> "" then !arbiter_key
-  else begin
-    let file_token = Fpath.add_seg secrets_dir "DATABOX_EXPORT_SERVICE_KEY" in
-    Rresult.R.map B64.encode (Bos.OS.File.read file_token)
-    (*Rresult.R.map B64.decode (Bos.OS.File.read file_token)*)
-    |> function
-    | Ok token ->
-        arbiter_key := token;
-        token
-    | Error msg ->
-        Logs.err (fun m -> m "[env] ARBITER_TOKEN %a" Rresult.R.pp_msg msg);
-        ""
-  end
+  let file_token = Fpath.add_seg secrets_dir "ARBITER_TOKEN" in
+  (* Rresult.R.map B64.encode (Bos.OS.File.read file_token) *)
+  (* Rresult.R.map B64.decode (Bos.OS.File.read file_token) *)
+  Bos.OS.File.read file_token
+  |> function
+  | Ok token -> token
+  | Error msg ->
+      Logs.warn (fun m -> m "[env] failed to read ARBITER_TOKEN using default value\n[env] %a" Rresult.R.pp_msg msg);
+      "secret"
+
+let arbiter_public_key () =
+  let file_key = Fpath.add_seg secrets_dir "ZMQ_PUBLIC_KEY" in
+  (* Rresult.R.map B64.encode (Bos.OS.File.read file_key) *)
+  (* Rresult.R.map B64.decode (Bos.OS.File.read file_token) *)
+  Bos.OS.File.read file_key
+  |> function
+  | Ok key -> key
+  | Error msg ->
+      Logs.warn (fun m -> m "[env] failed to read ZMQ_PUBLIC_KEY using default value\n[env] %a" Rresult.R.pp_msg msg);
+      "vl6wu0A@XP?}Or/&BR#LSxn>A+}L)p44/W[wXL3<"
+
+let arbiter_uri () = "tcp://arbiter:4444"
 
 (* deprecated
 let init_certs () =

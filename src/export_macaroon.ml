@@ -7,7 +7,7 @@ module R        = Rresult.R
 
 let s = ref None
 
-let get_secret () =
+(* let get_secret () =
   let endp = Uri.of_string (Export_env.arbiter_endp ()) in
   let url = Uri.with_path endp "/store/secret" in
 
@@ -31,8 +31,13 @@ let get_secret () =
        (*s := Some (B64.decode body);*)
        return_unit)
     (fun exn ->
-       Logs_lwt.err (fun m -> m "[macaroon] get_secret: %s" (Printexc.to_string exn)))
+       Logs_lwt.err (fun m -> m "[macaroon] get_secret: %s" (Printexc.to_string exn))) *)
 
+
+let get_secret () =
+  Zest_client.get_secret () >>= fun res ->
+  if res <> "" then s := Some res;
+  Lwt.return_unit
 
 let init_secret () =
   (* account for failures before arbiter gets up and responds *)

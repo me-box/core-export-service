@@ -1,17 +1,23 @@
-FROM databoxsystems/base-image-ocaml:alpine-3.4_ocaml-4.04.2 as BUILDER
-
-WORKDIR /export-service
-ADD . .
-
-# RUN opam pin add -y export-service /export-service
-# use internal solver
-RUN opam pin add -y --use-internal-solver export-service /export-service
-
-FROM alpine:3.4
+FROM ocaml/opam:alpine-3.6_ocaml-4.04.2 as BUILDER
 
 WORKDIR /core-export-service
-RUN apk update && apk add libsodium-dev gmp-dev
-COPY --from=BUILDER /home/opam/.opam/4.04.2/bin/export-service service
+ADD core-export-service.export core-export-service.export
+
+RUN sudo apk update && sudo apk add alpine-sdk bash ncurses-dev m4 perl gmp-dev zlib-dev libsodium-dev libffi-dev libressl-dev zeromq-dev &&\
+    opam remote add git https://github.com/ocaml/opam-repository.git &&\
+    opam pin add -n opium https://github.com/me-box/opium.git#term-argv &&\
+    opam pin add -n sodium https://github.com/me-box/ocaml-sodium.git#with_auth_hmac256 &&\
+    opam switch import core-export-service.export
+
+ADD . .
+RUN sudo chown opam: -R . && opam config exec -- jbuilder build src/service.exe
+
+
+FROM alpine:3.6
+
+WORKDIR /core-export-service
+RUN apk update && apk add libsodium gmp libzmq
+COPY --from=BUILDER /core-export-service/_build/default/src/service.exe service
 
 EXPOSE 8080
 
