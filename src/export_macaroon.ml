@@ -35,7 +35,13 @@ let s = ref None
 
 
 let get_secret () =
-  Zest_client.get_secret () >>= fun res ->
+  let request_endpoint = Export_env.arbiter_uri () in
+  let uri_path = "/store/secret" in
+  let identity = Export_env.local_name () in
+  let server_key = Export_env.arbiter_public_key () in
+  let arbiter_token = Export_env.arbiter_token () in
+  let options = Zest_client.({request_endpoint; uri_path; identity; server_key; arbiter_token}) in
+  Zest_client.get_secret options () >>= fun res ->
   if res <> "" then s := Some res;
   Lwt.return_unit
 
