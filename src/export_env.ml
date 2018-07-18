@@ -71,6 +71,6 @@ let init_certs () =
 *)
 
 let init_https () =
-  let file_cert = Fpath.add_seg secrets_dir "DATABOX_EXPORT_SERVICE.pem" in
-  let file_key  = Fpath.add_seg secrets_dir "DATABOX_EXPORT_SERVICE.pem" in
+  let file_cert = Fpath.add_seg secrets_dir "EXPORT-SERVICE.pem" in
+  let file_key  = Fpath.add_seg secrets_dir "EXPORT-SERVICE.pem" in
   Rresult.R.ok (file_cert, file_key)
