@@ -53,7 +53,7 @@ let ws_processor q fr_str push_fr () =
         let () = push_fr @@ Some close in
         listen_to_client ()
     | Some fr ->
-        Logs_lwt.warn (fun m -> m "unparsable frame: %a" pp fr)
+        Logs_lwt.warn (fun m -> m "unparsable frame: %s" (show fr))
         >>= listen_to_client
     | None ->
         Logs_lwt.err (fun m -> m "client frame stream closed!")
@@ -128,8 +128,8 @@ let ws_processor q fr_str push_fr () =
 let handler q (flow, conn) req body =
   Logs_lwt.info (fun m -> m "[ws] connection %s opened%!"
       (Cohttp.Connection.to_string conn)) >>= fun () ->
-  Cohttp_lwt_body.to_string body >>= fun body ->
-  Macaroon.macaroon_request_checker req ~body >>= function
+  Cohttp_lwt.Body.to_string body >>= fun body ->
+  Export_macaroon.macaroon_request_checker req ~body >>= function
   | true ->
     let uri = Cohttp.Request.uri req in
     let path = Uri.path uri in
@@ -143,11 +143,11 @@ let handler q (flow, conn) req body =
         return (resp, body)
     | _ ->
         let resp = Cohttp.Response.make ~status:`Not_found () in
-        let body = Cohttp_lwt_body.empty in
+        let body = Cohttp_lwt.Body.empty in
         return (resp, body))
   | false ->
   let resp = Cohttp.Response.make ~status:`Unauthorized () in
-  let body = Cohttp_lwt_body.of_string "Missing/Invalide API key/token" in
+  let body = Cohttp_lwt.Body.of_string "Missing/Invalide API key/token" in
   return (resp, body)
 
 
@@ -178,7 +178,7 @@ let ws ?secret ?port () =
   in
   let server = Cohttp_lwt_unix.Server.make ~conn_closed ~callback:(handler q) () in
 
-  Macaroon.init ?secret () >>= fun () ->
+  Export_macaroon.init ?secret () >>= fun () ->
   Lwt.join [
     W.worker_t q;
     Cohttp_lwt_unix.Server.create ~mode server]
