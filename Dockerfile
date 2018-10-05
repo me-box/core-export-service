@@ -24,4 +24,7 @@ EXPOSE 8080
 
 LABEL databox.type="export-service"
 
+RUN addgroup -S databox && adduser -S -g databox databox
+USER databox
+
 CMD ["./service", "-v"]
