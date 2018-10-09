@@ -7,7 +7,7 @@ RUN sudo apk update && sudo apk add alpine-sdk bash ncurses-dev m4 perl gmp-dev 
 #    opam remote add git https://github.com/ocaml/opam-repository.git &&\
     opam pin add -n opium https://github.com/me-box/opium.git#term-argv &&\
     opam pin add -n sodium https://github.com/me-box/ocaml-sodium.git#with_auth_hmac256 &&\
-    opam install -y logs cmdliner uuidm fpath rresult bos ppx_bitstring opium websocket-lwt cohttp depyt sodium macaroons lwt-zmq reason.1.13.7
+    opam install -y logs cmdliner uuidm fpath rresult bos ppx_bitstring opium websocket-lwt cohttp depyt sodium macaroons lwt-zmq reason
 #    opam switch import core-export-service.export
 
 ADD . .
