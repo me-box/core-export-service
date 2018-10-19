@@ -7,7 +7,7 @@ all: build-amd64 build-arm64v8 publish-images
 
 .PHONY: build-amd64
 build-amd64:
-	docker build -t $(DEFAULT_REG)/$(IMAGE_NAME)-amd64:$(VERSION) . $(OPTS)
+	docker build -t $(DEFAULT_REG)/$(IMAGE_NAME)-amd64:$(VERSION) -f Dockerfile . $(OPTS)
 
 .PHONY: build-arm64v8
 build-arm64v8:
